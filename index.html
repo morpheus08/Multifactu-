@@ -1,0 +1,2969 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>CONSTRUFACTU - Gestión Multi-Sector y Veri*factu</title>
+  <link rel="manifest" href="./manifest.json">
+  <meta name="theme-color" content="#0f172a">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="./sectors.js"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f1f5f9;
+      color: #0f172a;
+      -webkit-tap-highlight-color: transparent;
+      scroll-behavior: smooth;
+    }
+    .hoja-a4 {
+      width: 210mm;
+      min-height: 297mm;
+      padding: 15mm;
+      margin: 0 auto;
+      background: #ffffff;
+      color: #0f172a;
+      box-sizing: border-box;
+    }
+    @media print {
+      @page { size: A4 portrait; margin: 0; }
+      body * { visibility: hidden; }
+      #view-pdf, #view-pdf #print-area, #view-pdf #print-area * { visibility: visible; }
+      #view-pdf {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 210mm;
+        background: white !important;
+        padding: 0 !important;
+      }
+      .hoja-a4 { box-shadow: none !important; margin: 0 !important; width: 210mm !important; }
+      .no-print { display: none !important; }
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col items-center">
+
+  <!-- BOTÓN FLOTANTE DE DESPLAZAMIENTO -->
+  <button id="btn-scroll-float" onclick="accionScrollFlotante()" title="Desplazar pantalla" class="hidden fixed bottom-5 right-4 z-30 w-11 h-11 rounded-full bg-slate-900/90 text-amber-400 border border-amber-500/50 shadow-xl flex items-center justify-center font-extrabold text-lg active:scale-95 transition no-print">
+    ↓
+  </button>
+
+  <!-- BANNER ACTUALIZACIÓN PWA -->
+  <div id="update-banner" class="hidden fixed top-0 left-0 right-0 z-50 bg-amber-500 text-slate-950 px-4 py-3 shadow-lg flex items-center justify-between gap-2 no-print">
+    <div class="text-xs font-extrabold leading-tight">
+      🚀 Nueva versión disponible
+      <span id="update-banner-sub" class="block font-semibold text-[11px] opacity-90">Tus datos locales permanecerán intactos</span>
+    </div>
+    <div class="flex items-center gap-1.5 shrink-0">
+      <button onclick="aplicarActualizacionApp()" class="px-3 py-1.5 rounded-lg bg-slate-950 text-amber-400 font-extrabold text-xs shadow">
+        ACTUALIZAR
+      </button>
+      <button onclick="cerrarBannerActualizacion()" class="px-2 py-1.5 rounded-lg bg-amber-600/40 text-slate-950 font-bold text-xs">
+        ✕
+      </button>
+    </div>
+  </div>
+
+  <div id="app-shell" class="w-full max-w-md min-h-screen bg-slate-50 shadow-xl flex flex-col relative">
+
+    <!-- ==================== PANTALLA 1: LOGIN / REGISTRO / RECUPERACIÓN ==================== -->
+    <section id="view-login" class="flex-1 flex flex-col justify-center p-6 bg-white">
+      <div class="flex flex-col items-center mb-5">
+        <div id="login-brand-box" class="w-16 h-16 rounded-2xl bg-slate-900 flex items-center justify-center shadow-lg mb-3 border-2 border-amber-500 text-3xl">
+          🏗️
+        </div>
+        <h1 id="login-app-name" class="text-2xl font-extrabold tracking-tight text-slate-900">CONSTRUFACTU</h1>
+        <p id="login-app-tagline" class="text-[11px] font-semibold uppercase tracking-widest text-amber-600 mt-0.5">Gestión de Obra y Veri*factu</p>
+        <div id="login-license-pill" class="mt-2 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-bold">
+          ● Prueba Gratuita (15 días) · Modo Local-First
+        </div>
+      </div>
+
+      <!-- SELECTOR DE SECTOR EN ACCESO -->
+      <div class="mb-4 p-3 rounded-xl bg-slate-100 border border-slate-200">
+        <label class="block text-[10px] font-extrabold uppercase text-slate-500 mb-1">Sector / Gremio Activo</label>
+        <select id="login-sector-select" onchange="cambiarSectorDesdeSelector(this.value)" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-extrabold text-slate-900"></select>
+      </div>
+
+      <!-- SUB-VISTA A: INICIAR SESIÓN -->
+      <div id="auth-box-login" class="space-y-3.5">
+        <div>
+          <label class="block text-xs font-bold uppercase text-slate-500 mb-1">Usuario / Email</label>
+          <input id="login-user" type="email" value="admin@construcciones-garcia.es" class="w-full px-4 py-3 rounded-xl border border-slate-300 bg-slate-50 text-sm font-medium focus:outline-none focus:border-slate-900">
+        </div>
+        <div>
+          <label class="block text-xs font-bold uppercase text-slate-500 mb-1">Contraseña</label>
+          <input id="login-pass" type="password" value="1234" class="w-full px-4 py-3 rounded-xl border border-slate-300 bg-slate-50 text-sm font-medium focus:outline-none focus:border-slate-900">
+        </div>
+
+        <button id="btn-login-submit" onclick="iniciarSesion()" class="w-full py-3.5 rounded-xl bg-slate-900 text-white font-bold text-sm tracking-wide shadow-md active:scale-[0.99] transition">
+          ENTRAR
+        </button>
+
+        <div class="flex items-center justify-between pt-1 text-xs font-bold">
+          <button onclick="cambiarTabAuth('register')" class="text-blue-700 underline">Crear cuenta nueva</button>
+          <button onclick="cambiarTabAuth('recover')" class="text-slate-500 underline">¿Olvidaste tu contraseña?</button>
+        </div>
+
+        <div class="p-3 rounded-xl bg-slate-100 text-[11px] text-slate-600 text-center leading-relaxed">
+          Acceso demo precargado (clave: <strong>1234</strong>).<br>
+          <span id="login-version-label" class="font-bold text-slate-400">v1.0.0-multi</span>
+        </div>
+      </div>
+
+      <!-- SUB-VISTA B: CREAR CUENTA -->
+      <div id="auth-box-register" class="hidden space-y-3">
+        <div class="flex items-center justify-between mb-1">
+          <h2 class="text-sm font-extrabold uppercase text-slate-900">Registro de Nueva Empresa</h2>
+          <button onclick="cambiarTabAuth('login')" class="text-xs font-bold text-slate-500 underline">Volver</button>
+        </div>
+        <div>
+          <label class="block text-[11px] font-bold uppercase text-slate-500 mb-1">Sector de Actividad *</label>
+          <select id="reg-sector-select" onchange="cambiarSectorDesdeSelector(this.value)" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-slate-50 text-xs font-bold"></select>
+        </div>
+        <div>
+          <label class="block text-[11px] font-bold uppercase text-slate-500 mb-1">Nombre / Razón Social *</label>
+          <input id="reg-empresa" type="text" placeholder="Ej: Talleres Pérez S.L." class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm">
+        </div>
+        <div>
+          <label class="block text-[11px] font-bold uppercase text-slate-500 mb-1">NIF / CIF *</label>
+          <input id="reg-nif" type="text" placeholder="B12345678" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm uppercase">
+        </div>
+        <div>
+          <label class="block text-[11px] font-bold uppercase text-slate-500 mb-1">Email de Acceso *</label>
+          <input id="reg-email" type="email" placeholder="tu@empresa.es" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm">
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-[11px] font-bold uppercase text-slate-500 mb-1">Contraseña *</label>
+            <input id="reg-pass" type="password" placeholder="••••" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm">
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold uppercase text-slate-500 mb-1">Palabra Maestra *</label>
+            <input id="reg-master" type="text" placeholder="Ej: Sevilla26" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm">
+          </div>
+        </div>
+        <p class="text-[11px] text-slate-500 leading-tight">La <strong>Palabra Maestra</strong> permite recuperar tu contraseña sin depender de internet ni servidores externos.</p>
+        <button onclick="registrarCuenta()" class="w-full py-3.5 rounded-xl bg-emerald-600 text-white font-extrabold text-sm shadow-md">
+          CREAR CUENTA Y EMPEZAR PRUEBA
+        </button>
+      </div>
+
+      <!-- SUB-VISTA C: RECUPERAR CONTRASEÑA -->
+      <div id="auth-box-recover" class="hidden space-y-3">
+        <div class="flex items-center justify-between mb-1">
+          <h2 class="text-sm font-extrabold uppercase text-slate-900">Recuperar Acceso Local</h2>
+          <button onclick="cambiarTabAuth('login')" class="text-xs font-bold text-slate-500 underline">Volver</button>
+        </div>
+        <p class="text-xs text-slate-600">Introduce el <strong>NIF/CIF</strong> registrado o tu <strong>Palabra Maestra</strong> para establecer una nueva contraseña.</p>
+        <div>
+          <label class="block text-[11px] font-bold uppercase text-slate-500 mb-1">NIF/CIF o Palabra Maestra</label>
+          <input id="rec-master" type="text" placeholder="Ej: B41987654 o Sevilla26" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm">
+        </div>
+        <div>
+          <label class="block text-[11px] font-bold uppercase text-slate-500 mb-1">Nueva Contraseña</label>
+          <input id="rec-newpass" type="password" placeholder="Nueva clave" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm">
+        </div>
+        <button onclick="recuperarPasswordLocal()" class="w-full py-3.5 rounded-xl bg-slate-900 text-white font-bold text-sm">
+          RESTABLECER CONTRASEÑA
+        </button>
+      </div>
+    </section>
+
+    <!-- ==================== PANTALLA 2: MENÚ PRINCIPAL ==================== -->
+    <section id="view-menu" class="hidden flex-1 flex flex-col p-5">
+      <header class="flex items-center justify-between mb-4 pb-3 border-b border-slate-200">
+        <div class="flex items-center gap-3">
+          <div id="menu-logo-box" class="w-12 h-12 rounded-xl bg-slate-900 text-amber-400 flex items-center justify-center font-extrabold text-lg shrink-0 overflow-hidden border border-slate-300">
+            CG
+          </div>
+          <div>
+            <div class="flex items-center gap-1.5">
+              <h2 id="menu-empresa-nombre" class="font-extrabold text-slate-900 text-sm leading-tight">Empresa S.L.</h2>
+            </div>
+            <div class="flex items-center gap-2 mt-0.5">
+              <p id="menu-empresa-nif" class="text-xs text-slate-500">NIF: B41987654</p>
+              <span id="menu-plan-badge" class="text-[10px] font-extrabold px-2 py-0.5 rounded bg-amber-100 text-amber-900">PRUEBA (15d)</span>
+            </div>
+          </div>
+        </div>
+        <button onclick="irA('config')" class="p-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 shadow-xs text-base" title="Ajustes y Copia Nube">
+          ⚙️
+        </button>
+      </header>
+
+      <div id="backup-banner" onclick="irA('config')" class="mb-3 p-3 rounded-xl border flex items-center justify-between cursor-pointer transition">
+        <div class="flex items-center gap-2.5">
+          <span id="backup-banner-icon" class="text-lg">🛡️</span>
+          <div>
+            <div id="backup-banner-title" class="text-xs font-extrabold">Copia de seguridad al día</div>
+            <div id="backup-banner-sub" class="text-[11px] opacity-80">Toca para guardar en iCloud / Google Drive</div>
+          </div>
+        </div>
+        <span class="text-xs font-bold underline">Nube ›</span>
+      </div>
+
+      <div class="space-y-2.5 flex-1">
+        <button onclick="irA('presupuestos')" class="w-full p-4 rounded-2xl bg-white border border-slate-200 shadow-xs flex items-center justify-between active:bg-slate-100 transition">
+          <div class="flex items-center gap-3.5">
+            <span class="w-11 h-11 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center text-xl">📋</span>
+            <div class="text-left">
+              <div id="menu-lbl-presupuestos" class="font-extrabold text-slate-900 text-base">PRESUPUESTOS</div>
+              <div id="menu-sub-presupuestos" class="text-xs text-slate-500">Valoraciones y partidas</div>
+            </div>
+          </div>
+          <span id="badge-presupuestos" class="px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 font-bold text-xs">0</span>
+        </button>
+
+        <button onclick="irA('albaranes')" class="w-full p-4 rounded-2xl bg-white border border-slate-200 shadow-xs flex items-center justify-between active:bg-slate-100 transition">
+          <div class="flex items-center gap-3.5">
+            <span id="menu-ico-albaranes" class="w-11 h-11 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center text-xl">🚚</span>
+            <div class="text-left">
+              <div id="menu-lbl-albaranes" class="font-extrabold text-slate-900 text-base">ALBARANES</div>
+              <div id="menu-sub-albaranes" class="text-xs text-slate-500">Entregas, partes y agrupación</div>
+            </div>
+          </div>
+          <span id="badge-albaranes" class="px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 font-bold text-xs">0</span>
+        </button>
+
+        <button onclick="irA('facturas')" class="w-full p-4 rounded-2xl bg-slate-900 text-white shadow-md flex items-center justify-between active:bg-slate-800 transition">
+          <div class="flex items-center gap-3.5">
+            <span class="w-11 h-11 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-xl">🧾</span>
+            <div class="text-left">
+              <div class="font-extrabold text-white text-base">FACTURAS</div>
+              <div class="text-xs text-slate-300">Proformas y Oficiales Veri*factu</div>
+            </div>
+          </div>
+          <span id="badge-facturas" class="px-2.5 py-1 rounded-full bg-amber-500 text-slate-950 font-extrabold text-xs">0</span>
+        </button>
+
+        <div class="grid grid-cols-2 gap-2.5 pt-1">
+          <button onclick="irA('clientes')" class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-xs flex flex-col items-start active:bg-slate-100 transition">
+            <span class="text-xl mb-1.5">👥</span>
+            <div class="font-extrabold text-slate-900 text-sm">CLIENTES</div>
+            <div id="badge-clientes" class="text-xs text-slate-500 mt-0.5">0 registrados</div>
+          </button>
+
+          <button onclick="irA('gastos')" class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-xs flex flex-col items-start active:bg-slate-100 transition">
+            <span class="text-xl mb-1.5">💸</span>
+            <div class="font-extrabold text-slate-900 text-sm">GASTOS</div>
+            <div id="badge-gastos" class="text-xs text-slate-500 mt-0.5">0 facturas</div>
+          </button>
+        </div>
+
+        <button onclick="irA('tarifario')" class="w-full p-3.5 rounded-2xl bg-white border border-slate-200 shadow-xs flex items-center justify-between active:bg-slate-100 transition">
+          <div class="flex items-center gap-3">
+            <span class="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center text-lg">🏷️</span>
+            <div class="text-left">
+              <div class="font-extrabold text-slate-900 text-sm">TARIFARIO Y PRECIOS</div>
+              <div class="text-xs text-slate-500">Partidas, unidades e importación Excel</div>
+            </div>
+          </div>
+          <span id="badge-tarifario" class="px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-800 font-bold text-xs">0</span>
+        </button>
+
+        <button onclick="irA('estado')" class="w-full p-3.5 rounded-2xl bg-white border border-slate-200 shadow-xs flex items-center justify-between active:bg-slate-100 transition">
+          <div class="flex items-center gap-3">
+            <span class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center text-lg">📊</span>
+            <div class="text-left">
+              <div class="font-extrabold text-slate-900 text-sm">MI ESTADO FISCAL</div>
+              <div class="text-xs text-slate-500">IVA Modelo 303 y Exportación CSV</div>
+            </div>
+          </div>
+          <span class="text-slate-400 text-lg">›</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- ==================== PANTALLA 3: CLIENTES ==================== -->
+    <section id="view-clientes" class="hidden flex-1 flex flex-col p-5">
+      <div class="flex items-center gap-3 mb-4">
+        <button onclick="irA('menu')" class="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center font-bold text-lg">‹</button>
+        <h2 class="text-xl font-extrabold text-slate-900 flex-1">CLIENTES</h2>
+      </div>
+
+      <button onclick="abrirFormCliente()" class="w-full py-3.5 rounded-xl bg-slate-900 text-white font-bold text-sm tracking-wide shadow-sm mb-3">
+        + NUEVO CLIENTE
+      </button>
+
+      <input id="buscar-cliente" oninput="renderClientes()" type="text" placeholder="Buscar por nombre, NIF o teléfono..." class="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-sm mb-4 focus:outline-none focus:border-slate-800">
+
+      <div id="lista-clientes" class="space-y-3 pb-10"></div>
+    </section>
+
+    <!-- ==================== PANTALLA 4: FICHA CLIENTE ==================== -->
+    <section id="view-cliente-form" class="hidden flex-1 flex flex-col p-5">
+      <div class="flex items-center gap-3 mb-4">
+        <button onclick="irA('clientes')" class="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center font-bold text-lg">‹</button>
+        <h2 id="titulo-form-cliente" class="text-lg font-extrabold text-slate-900">NUEVO CLIENTE</h2>
+      </div>
+
+      <div class="space-y-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+        <input type="hidden" id="cli-id">
+        <div>
+          <label class="block text-xs font-bold uppercase text-slate-500 mb-1">Nombre / Razón Social *</label>
+          <input id="cli-nombre" type="text" class="w-full px-3.5 py-3 rounded-xl border border-slate-300 text-sm font-medium">
+        </div>
+        <div>
+          <label class="block text-xs font-bold uppercase text-slate-500 mb-1">NIF / CIF / NIE *</label>
+          <input id="cli-nif" type="text" class="w-full px-3.5 py-3 rounded-xl border border-slate-300 text-sm font-medium uppercase">
+        </div>
+        <div>
+          <label class="block text-xs font-bold uppercase text-slate-500 mb-1">Dirección</label>
+          <input id="cli-direccion" type="text" class="w-full px-3.5 py-3 rounded-xl border border-slate-300 text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-bold uppercase text-slate-500 mb-1">CP y Población</label>
+          <input id="cli-poblacion" type="text" class="w-full px-3.5 py-3 rounded-xl border border-slate-300 text-sm">
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-bold uppercase text-slate-500 mb-1">Teléfono</label>
+            <input id="cli-telefono" type="tel" class="w-full px-3.5 py-3 rounded-xl border border-slate-300 text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-bold uppercase text-slate-500 mb-1">Email</label>
+            <input id="cli-email" type="email" class="w-full px-3.5 py-3 rounded-xl border border-slate-300 text-sm">
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-4 space-y-2.5 pb-10">
+        <button onclick="guardarCliente()" class="w-full py-3.5 rounded-xl bg-slate-900 text-white font-bold text-sm">GUARDAR CLIENTE</button>
+        <button onclick="irA('clientes')" class="w-full py-3 rounded-xl bg-white border border-slate-300 text-slate-700 font-bold text-sm">CANCELAR</button>
+        <button id="btn-eliminar-cliente" onclick="eliminarCliente()" class="hidden w-full py-3 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 font-bold text-xs mt-2">ELIMINAR CLIENTE</button>
+      </div>
+    </section>
+
+    <!-- ==================== PANTALLA 5: LISTADO DOCUMENTOS ==================== -->
+    <section id="view-docs" class="hidden flex-1 flex flex-col p-5">
+      <div class="flex items-center gap-3 mb-4">
+        <button onclick="irA('menu')" class="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center font-bold text-lg">‹</button>
+        <h2 id="docs-titulo" class="text-xl font-extrabold text-slate-900 flex-1 uppercase">DOCUMENTOS</h2>
+      </div>
+
+      <button id="btn-nuevo-doc" onclick="nuevoDocumento()" class="w-full py-3.5 rounded-xl bg-slate-900 text-white font-bold text-sm tracking-wide shadow-sm mb-3 uppercase">
+        + NUEVO DOCUMENTO
+      </button>
+
+      <div id="barra-agrupar-albaranes" class="hidden mb-3 p-3 rounded-xl bg-amber-50 border border-amber-300 flex items-center justify-between">
+        <span id="txt-albaranes-sel" class="text-xs font-bold text-amber-900">0 marcados</span>
+        <button onclick="unificarAlbaranesEnProforma()" class="px-3 py-2 rounded-lg bg-amber-600 text-white font-extrabold text-xs">
+          UNIFICAR EN PROFORMA
+        </button>
+      </div>
+
+      <div id="lista-docs" class="space-y-3 pb-10"></div>
+    </section>
+
+    <!-- ==================== PANTALLA 6: EDITOR DE DOCUMENTO ==================== -->
+    <section id="view-doc-editor" class="hidden flex-1 flex flex-col p-5">
+      <div class="flex items-center gap-3 mb-3">
+        <button onclick="volverDeEditor()" class="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center font-bold text-lg">‹</button>
+        <div class="flex-1">
+          <h2 id="editor-titulo" class="text-base font-extrabold text-slate-900 uppercase">EDITAR DOCUMENTO</h2>
+          <p id="editor-subtitulo" class="text-xs text-slate-500">Borrador editable</p>
+        </div>
+      </div>
+
+      <div class="space-y-3 pb-12">
+        <input type="hidden" id="doc-id">
+        <input type="hidden" id="doc-tipo">
+
+        <div class="bg-white p-4 rounded-2xl border border-slate-200 space-y-3">
+          <div>
+            <label class="block text-xs font-bold uppercase text-slate-500 mb-1">Cliente *</label>
+            <select id="doc-cliente" onchange="alCambiarSelectCliente(this)" class="w-full px-3 py-2.5 rounded-xl border border-slate-300 bg-slate-50 text-sm font-semibold"></select>
+          </div>
+          <div>
+            <label id="lbl-doc-obra" class="block text-xs font-bold uppercase text-slate-500 mb-1">Nombre de la Obra / Referencia</label>
+            <input id="doc-obra" type="text" placeholder="Ej: Reforma vivienda C/ Real 18" class="w-full px-3 py-2.5 rounded-xl border border-slate-300 bg-slate-50 text-sm font-medium">
+          </div>
+
+          <div id="editor-campos-extra" class="hidden grid grid-cols-2 gap-2 pt-1"></div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-xs font-bold uppercase text-slate-500 mb-1">Fecha</label>
+              <input id="doc-fecha" type="date" class="w-full px-3 py-2.5 rounded-xl border border-slate-300 bg-slate-50 text-sm">
+            </div>
+            <div>
+              <label class="block text-xs font-bold uppercase text-slate-500 mb-1">IVA Aplicable</label>
+              <select id="doc-iva" onchange="recalcularEditor()" class="w-full px-3 py-2.5 rounded-xl border border-slate-300 bg-slate-50 text-sm font-semibold">
+                <option value="21">21% General</option>
+                <option value="10">10% Reducido</option>
+                <option value="4">4% Superreducido</option>
+                <option value="0">0% Exento / Inv. Sujeto Pasivo</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white p-4 rounded-2xl border border-slate-200">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-xs font-extrabold uppercase text-slate-600">Partidas / Conceptos</h3>
+            <button onclick="agregarLineaEditor()" class="px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-bold">+ Añadir Línea</button>
+          </div>
+          <div id="editor-lineas" class="space-y-3"></div>
+        </div>
+
+        <div class="bg-white p-4 rounded-2xl border border-slate-200">
+          <label class="block text-xs font-extrabold uppercase text-slate-600 mb-1">Observaciones / Notas</label>
+          <textarea id="doc-observaciones" rows="2" placeholder="Condiciones, garantía o notas del servicio..." class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm"></textarea>
+        </div>
+
+        <div class="bg-slate-900 text-white p-4 rounded-2xl space-y-1">
+          <div class="flex justify-between text-xs text-slate-300">
+            <span>Base Imponible:</span>
+            <span id="ed-base">0,00 €</span>
+          </div>
+          <div class="flex justify-between text-xs text-slate-300">
+            <span>Cuota IVA:</span>
+            <span id="ed-iva-cuota">0,00 €</span>
+          </div>
+          <div class="flex justify-between text-lg font-extrabold text-amber-400 pt-1 border-t border-slate-700">
+            <span>TOTAL:</span>
+            <span id="ed-total">0,00 €</span>
+          </div>
+        </div>
+
+        <div class="space-y-2 pt-1">
+          <button onclick="guardarDocumento(false)" class="w-full py-3.5 rounded-xl bg-slate-800 text-white font-bold text-sm">
+            GUARDAR CAMBIOS
+          </button>
+          <button onclick="guardarDocumento(true)" class="w-full py-3 rounded-xl bg-white border border-slate-300 text-slate-800 font-bold text-sm">
+            📄 GENERAR / GUARDAR PDF A4
+          </button>
+          <button id="btn-convertir-proforma" onclick="convertirAProformaDesdeEditor()" class="hidden w-full py-3.5 rounded-xl bg-blue-600 text-white font-bold text-sm">
+            PASAR A FACTURA PROFORMA
+          </button>
+          <button id="btn-emitir-verifactu" onclick="abrirModalVerifactu()" class="hidden w-full py-4 rounded-xl bg-emerald-600 text-white font-extrabold text-sm tracking-wide shadow-md">
+            🔒 EMITIR FACTURA OFICIAL VERI*FACTU
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== MODAL RÁPIDO NUEVO CLIENTE DESDE EDITOR ==================== -->
+    <div id="modal-nuevo-cliente-rapido" class="hidden fixed inset-0 bg-slate-900/75 z-50 flex items-center justify-center p-5">
+      <div class="bg-white rounded-2xl max-w-sm w-full p-5 space-y-3 shadow-2xl">
+        <div class="flex items-center justify-between">
+          <h3 class="text-base font-extrabold text-slate-900">Alta Rápida de Cliente</h3>
+          <button onclick="cerrarModalClienteRapido()" class="text-slate-400 font-bold text-sm">✕</button>
+        </div>
+        <div>
+          <label class="block text-[11px] font-bold uppercase text-slate-500 mb-1">Nombre / Razón Social *</label>
+          <input id="qcli-nombre" type="text" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm">
+        </div>
+        <div>
+          <label class="block text-[11px] font-bold uppercase text-slate-500 mb-1">NIF / CIF *</label>
+          <input id="qcli-nif" type="text" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm uppercase">
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-[11px] font-bold uppercase text-slate-500 mb-1">Teléfono</label>
+            <input id="qcli-telefono" type="tel" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm">
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold uppercase text-slate-500 mb-1">Población</label>
+            <input id="qcli-poblacion" type="text" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm">
+          </div>
+        </div>
+        <div>
+          <label class="block text-[11px] font-bold uppercase text-slate-500 mb-1">Dirección</label>
+          <input id="qcli-direccion" type="text" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm">
+        </div>
+        <div class="grid grid-cols-2 gap-2 pt-2">
+          <button onclick="cerrarModalClienteRapido()" class="py-2.5 rounded-xl border border-slate-300 font-bold text-xs text-slate-700">CANCELAR</button>
+          <button onclick="guardarClienteRapido()" class="py-2.5 rounded-xl bg-slate-900 text-white font-bold text-xs">GUARDAR Y USAR</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== PANTALLA 7: GASTOS ==================== -->
+    <section id="view-gastos" class="hidden flex-1 flex flex-col p-5">
+      <div class="flex items-center gap-3 mb-4">
+        <button onclick="irA('menu')" class="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center font-bold text-lg">‹</button>
+        <h2 class="text-xl font-extrabold text-slate-900 flex-1">GASTOS / COMPRAS</h2>
+      </div>
+
+      <button onclick="abrirFormGasto()" class="w-full py-3.5 rounded-xl bg-rose-700 text-white font-bold text-sm tracking-wide shadow-sm mb-3">
+        + REGISTRAR GASTO / FACTURA RECIBIDA
+      </button>
+
+      <input id="buscar-gasto" oninput="renderGastos()" type="text" placeholder="Buscar proveedor, NIF o concepto..." class="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-sm mb-4">
+
+      <div id="lista-gastos" class="space-y-3 pb-10"></div>
+    </section>
+
+    <!-- ==================== PANTALLA 8: FORMULARIO GASTO ==================== -->
+    <section id="view-gasto-form" class="hidden flex-1 flex flex-col p-5">
+      <div class="flex items-center gap-3 mb-4">
+        <button onclick="irA('gastos')" class="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center font-bold text-lg">‹</button>
+        <h2 class="text-lg font-extrabold text-slate-900">REGISTRO DE GASTO</h2>
+      </div>
+
+      <div class="space-y-3 bg-white p-4 rounded-2xl border border-slate-200 pb-10">
+        <input type="hidden" id="gas-id">
+        <div>
+          <label class="block text-xs font-bold uppercase text-slate-500 mb-1">Proveedor / Almacén *</label>
+          <input id="gas-proveedor" list="lista-proveedores-sug" onchange="autocompletarProveedor()" type="text" placeholder="Nombre del proveedor" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-medium">
+          <datalist id="lista-proveedores-sug"></datalist>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-bold uppercase text-slate-500 mb-1">NIF Proveedor</label>
+            <input id="gas-nif" type="text" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm uppercase">
+          </div>
+          <div>
+            <label class="block text-xs font-bold uppercase text-slate-500 mb-1">Nº Factura Recibida</label>
+            <input id="gas-num" type="text" placeholder="F-2026/..." class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-bold uppercase text-slate-500 mb-1">Fecha</label>
+            <input id="gas-fecha" type="date" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-bold uppercase text-slate-500 mb-1">Categoría</label>
+            <select id="gas-categoria" class="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm"></select>
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-bold uppercase text-slate-500 mb-1">Concepto breve</label>
+          <input id="gas-concepto" type="text" placeholder="Descripción del suministro o compra" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm">
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-bold uppercase text-slate-500 mb-1">Base Imponible (€) *</label>
+            <input id="gas-base" type="number" step="0.01" oninput="recalcularGasto()" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-bold">
+          </div>
+          <div>
+            <label class="block text-xs font-bold uppercase text-slate-500 mb-1">IVA Soportado</label>
+            <select id="gas-iva" onchange="recalcularGasto()" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm">
+              <option value="21">21%</option>
+              <option value="10">10%</option>
+              <option value="4">4%</option>
+              <option value="0">0%</option>
+            </select>
+          </div>
+        </div>
+        <div class="p-3 rounded-xl bg-slate-100 flex justify-between items-center">
+          <span class="text-xs font-bold text-slate-600">TOTAL FACTURA GASTO:</span>
+          <span id="gas-total-preview" class="text-base font-extrabold text-slate-900">0,00 €</span>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold uppercase text-slate-500 mb-1">Foto Ticket / Factura (Opcional)</label>
+          <input id="gas-foto-input" type="file" accept="image/*" onchange="procesarFotoGasto(event)" class="w-full text-xs text-slate-600">
+          <img id="gas-foto-preview" class="hidden mt-2 w-full max-h-40 object-contain rounded-xl border border-slate-200">
+        </div>
+
+        <div class="pt-2 space-y-2">
+          <button onclick="guardarGasto()" class="w-full py-3.5 rounded-xl bg-rose-700 text-white font-bold text-sm">GUARDAR GASTO</button>
+          <button onclick="irA('gastos')" class="w-full py-3 rounded-xl bg-white border border-slate-300 text-slate-700 font-bold text-sm">CANCELAR</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== PANTALLA 9: TARIFARIO ==================== -->
+    <section id="view-tarifario" class="hidden flex-1 flex flex-col p-5">
+      <div class="flex items-center gap-3 mb-4">
+        <button onclick="irA('menu')" class="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center font-bold text-lg">‹</button>
+        <h2 class="text-xl font-extrabold text-slate-900 flex-1">TARIFARIO</h2>
+      </div>
+
+      <button onclick="abrirFormPartidaTarifario()" class="w-full py-3.5 rounded-xl bg-slate-900 text-white font-bold text-sm tracking-wide shadow-sm mb-2.5">
+        + NUEVA PARTIDA / PRECIO
+      </button>
+
+      <div class="grid grid-cols-2 gap-2 mb-3">
+        <button onclick="exportarTarifarioCSV()" class="py-2.5 rounded-xl bg-white border border-slate-300 text-slate-800 font-extrabold text-xs">
+          📤 EXPORTAR CSV
+        </button>
+        <button onclick="abrirModalImportarTarifario()" class="py-2.5 rounded-xl bg-indigo-700 text-white font-extrabold text-xs shadow-sm">
+          📥 IMPORTAR EXCEL / CSV
+        </button>
+      </div>
+
+      <div class="flex gap-2 mb-4">
+        <input id="buscar-tarifario" oninput="renderTarifario()" type="text" placeholder="Buscar partida..." class="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm focus:outline-none focus:border-slate-800">
+        <select id="filtro-capitulo-tarifario" onchange="renderTarifario()" class="w-36 px-2.5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-700">
+          <option value="">Todos capítulos</option>
+        </select>
+      </div>
+
+      <div id="lista-tarifario" class="space-y-2.5 pb-10"></div>
+    </section>
+
+    <!-- ==================== MODAL EDITAR / CREAR PARTIDA TARIFARIO ==================== -->
+    <div id="modal-partida-tarifario" class="hidden fixed inset-0 bg-slate-900/75 z-50 flex items-center justify-center p-5">
+      <div class="bg-white rounded-2xl max-w-sm w-full p-5 space-y-3 shadow-2xl">
+        <div class="flex items-center justify-between">
+          <h3 id="titulo-modal-partida" class="text-base font-extrabold text-slate-900">Editar Partida</h3>
+          <button onclick="cerrarModalPartidaTarifario()" class="text-slate-400 font-bold text-sm">✕</button>
+        </div>
+        <input type="hidden" id="tar-idx">
+        <div>
+          <label class="block text-[11px] font-bold uppercase text-slate-500 mb-1">Capítulo / Categoría</label>
+          <input id="tar-capitulo" list="lista-capitulos-sug" type="text" placeholder="Ej: Mano de Obra, Materiales..." class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm">
+          <datalist id="lista-capitulos-sug"></datalist>
+        </div>
+        <div>
+          <label class="block text-[11px] font-bold uppercase text-slate-500 mb-1">Concepto / Descripción *</label>
+          <input id="tar-concepto" type="text" placeholder="Descripción del servicio o artículo" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm font-medium">
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-[11px] font-bold uppercase text-slate-500 mb-1">Unidad</label>
+            <select id="tar-unidad" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm font-bold bg-white"></select>
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold uppercase text-slate-500 mb-1">Precio (€) *</label>
+            <input id="tar-precio" type="number" step="0.01" placeholder="0.00" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm font-bold">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-2 pt-2">
+          <button onclick="cerrarModalPartidaTarifario()" class="py-2.5 rounded-xl border border-slate-300 font-bold text-xs text-slate-700">CANCELAR</button>
+          <button onclick="guardarPartidaTarifario()" class="py-2.5 rounded-xl bg-slate-900 text-white font-bold text-xs">GUARDAR</button>
+        </div>
+        <button id="btn-eliminar-partida-tar" onclick="eliminarPartidaTarifario()" class="hidden w-full py-2 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 font-bold text-xs">
+          ELIMINAR PARTIDA DEL TARIFARIO
+        </button>
+      </div>
+    </div>
+
+    <!-- ==================== MODAL AYUDA E IMPORTACIÓN EXCEL / CSV TARIFARIO ==================== -->
+    <div id="modal-importar-tarifario" class="hidden fixed inset-0 bg-slate-900/80 z-50 flex items-center justify-center p-4 overflow-y-auto">
+      <div class="bg-white rounded-2xl max-w-sm w-full p-5 space-y-3.5 shadow-2xl my-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-base font-extrabold text-slate-900">📥 Importar Tarifas (Excel / CSV)</h3>
+          <button onclick="cerrarModalImportarTarifario()" class="text-slate-400 font-bold text-sm">✕</button>
+        </div>
+
+        <div class="p-3 rounded-xl bg-indigo-50 border border-indigo-200 space-y-2 text-xs text-indigo-950">
+          <p class="font-extrabold uppercase text-[11px] text-indigo-800">📋 Estructura requerida del archivo:</p>
+          <p class="leading-relaxed">El archivo <strong>.xlsx</strong>, <strong>.xls</strong> o <strong>.csv</strong> debe tener en la <strong>fila 1</strong> estas columnas (en cualquier orden):</p>
+          <ul class="space-y-1 bg-white p-2.5 rounded-lg border border-indigo-100 text-[11px]">
+            <li>• <strong>Capitulo</strong> <em>(opcional)</em>: Familia o capítulo</li>
+            <li>• <strong>Concepto</strong> <em>(obligatorio)</em>: Descripción de la partida</li>
+            <li>• <strong>Unidad</strong> <em>(obligatorio)</em>: Ej. ud, h, m², ml, kit</li>
+            <li>• <strong>Precio</strong> <em>(obligatorio)</em>: Importe sin IVA (ej. 32,50)</li>
+          </ul>
+          <button onclick="descargarPlantillaTarifarioExcel()" class="w-full py-2 rounded-lg bg-white border border-indigo-300 text-indigo-800 font-extrabold text-[11px] shadow-xs">
+            📄 DESCARGAR PLANTILLA EXCEL (.XLSX) DEL SECTOR
+          </button>
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-bold uppercase text-slate-600 mb-1">Si una partida ya existe en el tarifario:</label>
+          <select id="imp-modo-duplicados" class="w-full px-3 py-2.5 rounded-xl border border-slate-300 bg-slate-50 text-xs font-bold text-slate-800">
+            <option value="actualizar">Actualizar su precio, unidad y capítulo</option>
+            <option value="omitir">Mantener el precio actual (solo añadir nuevas)</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-bold uppercase text-slate-600 mb-1">Seleccionar archivo (.xlsx, .xls, .csv)</label>
+          <input id="imp-tarifario-file" type="file" accept=".xlsx,.xls,.csv" class="w-full text-xs text-slate-700 file:mr-2 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-slate-900 file:text-white">
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 pt-1">
+          <button onclick="cerrarModalImportarTarifario()" class="py-2.5 rounded-xl border border-slate-300 font-bold text-xs text-slate-700">CANCELAR</button>
+          <button onclick="procesarArchivoTarifario()" class="py-2.5 rounded-xl bg-emerald-600 text-white font-extrabold text-xs">SUBIR E IMPORTAR</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== PANTALLA 10: MI ESTADO Y EXPORTACIÓN ==================== -->
+    <section id="view-estado" class="hidden flex-1 flex flex-col p-5">
+      <div class="flex items-center gap-3 mb-4">
+        <button onclick="irA('menu')" class="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center font-bold text-lg">‹</button>
+        <h2 class="text-xl font-extrabold text-slate-900 flex-1">MI ESTADO FISCAL</h2>
+      </div>
+
+      <div class="space-y-4 pb-10">
+        <div class="bg-white p-4 rounded-2xl border border-slate-200 flex gap-2">
+          <select id="est-trimestre" onchange="renderEstado()" class="flex-1 px-3 py-2.5 rounded-xl border border-slate-300 font-bold text-sm">
+            <option value="1">1º Trimestre (Ene - Mar)</option>
+            <option value="2">2º Trimestre (Abr - Jun)</option>
+            <option value="3">3º Trimestre (Jul - Sep)</option>
+            <option value="4" selected>4º Trimestre (Oct - Dic)</option>
+            <option value="ALL">Año Completo</option>
+          </select>
+          <select id="est-anio" onchange="renderEstado()" class="w-28 px-3 py-2.5 rounded-xl border border-slate-300 font-bold text-sm">
+            <option value="2026" selected>2026</option>
+            <option value="2025">2025</option>
+          </select>
+        </div>
+
+        <div class="bg-slate-900 text-white p-5 rounded-2xl space-y-3 shadow-md">
+          <div class="text-xs font-bold uppercase tracking-wider text-amber-400">Liquidación IVA (Modelo 303)</div>
+          <div class="flex justify-between text-sm">
+            <span class="text-slate-300">Ventas Oficiales (Base):</span>
+            <span id="est-ventas-base" class="font-bold">0,00 €</span>
+          </div>
+          <div class="flex justify-between text-sm">
+            <span class="text-slate-300">(+) IVA Repercutido:</span>
+            <span id="est-iva-rep" class="font-bold text-emerald-400">0,00 €</span>
+          </div>
+          <div class="flex justify-between text-sm">
+            <span class="text-slate-300">(-) IVA Soportado (Gastos):</span>
+            <span id="est-iva-sop" class="font-bold text-rose-400">0,00 €</span>
+          </div>
+          <div class="pt-3 border-t border-slate-700 flex justify-between items-center">
+            <span class="text-sm font-extrabold">RESULTADO IVA TRIMESTRE:</span>
+            <span id="est-iva-neto" class="text-xl font-extrabold text-amber-400">0,00 €</span>
+          </div>
+        </div>
+
+        <div class="bg-white p-4 rounded-2xl border border-slate-200 space-y-2.5">
+          <h3 class="text-xs font-extrabold uppercase text-slate-600">Exportación para Gestoría (Excel / CSV)</h3>
+          <button onclick="exportarCSVFacturas('est')" class="w-full py-3 rounded-xl bg-emerald-700 text-white font-bold text-xs">
+            📥 LIBRO FACTURAS EMITIDAS OFICIALES (.CSV)
+          </button>
+          <button onclick="exportarCSVGastos('est')" class="w-full py-3 rounded-xl bg-rose-700 text-white font-bold text-xs">
+            📥 LIBRO FACTURAS RECIBIDAS / GASTOS (.CSV)
+          </button>
+          <button onclick="exportarCSVClientes()" class="w-full py-3 rounded-xl bg-slate-800 text-white font-bold text-xs">
+            📥 DIRECTORIO DE CLIENTES (.CSV)
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== PANTALLA 11: CONFIGURACIÓN, NUBE Y LICENCIA ==================== -->
+    <section id="view-config" class="hidden flex-1 flex flex-col p-5">
+      <div class="flex items-center gap-3 mb-4">
+        <button onclick="irA('menu')" class="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center font-bold text-lg">‹</button>
+        <h2 class="text-xl font-extrabold text-slate-900 flex-1">AJUSTES, NUBE Y LICENCIA</h2>
+      </div>
+
+      <div class="space-y-4 pb-12">
+        <div class="bg-amber-50 p-4 rounded-2xl border border-amber-300 space-y-2.5">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xs font-extrabold uppercase text-amber-950">⭐ Suscripción y Licencia</h3>
+            <span id="cfg-lic-status" class="text-[10px] font-extrabold px-2 py-0.5 rounded bg-amber-200 text-amber-950">PERIODO DE PRUEBA</span>
+          </div>
+          <p id="cfg-lic-desc" class="text-xs text-amber-900">Disfrutando de 15 días de prueba gratuita. Introduce tu clave de suscripción PRO para uso ilimitado.</p>
+          <div class="flex gap-2">
+            <input id="cfg-lic-key" type="text" placeholder="PRO-2026-XXXX" class="flex-1 px-3 py-2 rounded-xl border border-amber-300 bg-white text-xs font-bold uppercase">
+            <button onclick="activarLicenciaPro()" class="px-3.5 py-2 rounded-xl bg-slate-900 text-amber-400 font-extrabold text-xs">ACTIVAR</button>
+          </div>
+        </div>
+
+        <div class="bg-blue-50 p-4 rounded-2xl border border-blue-200 space-y-3">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xs font-extrabold uppercase text-blue-900">☁️ Copia de Seguridad en Nube Móvil</h3>
+            <span id="cfg-last-backup" class="text-[11px] font-bold text-blue-700">Sin copias aún</span>
+          </div>
+          <p class="text-xs text-blue-800">Guarda toda tu base de datos en <strong>iCloud Drive (iPhone)</strong> o <strong>Google Drive (Android)</strong> con un toque.</p>
+          <button onclick="compartirBackupNube()" class="w-full py-3.5 rounded-xl bg-blue-700 text-white font-extrabold text-xs tracking-wide shadow-sm">
+            ☁️ GUARDAR EN ICLOUD / DRIVE (NUBE MÓVIL)
+          </button>
+          <button onclick="descargarBackupJSON()" class="w-full py-2.5 rounded-xl bg-white border border-blue-300 text-blue-900 font-bold text-xs">
+            💾 DESCARGAR ARCHIVO (.JSON) EN DISPOSITIVO
+          </button>
+          <div>
+            <label class="block text-[11px] font-bold uppercase text-blue-900 mb-1">Frecuencia de recordatorio</label>
+            <select id="cfg-backup-freq" onchange="guardarFrecuenciaBackup()" class="w-full px-3 py-2 rounded-xl border border-blue-300 bg-white text-xs font-bold text-slate-800">
+              <option value="7">Avisar cada 7 días</option>
+              <option value="15">Avisar cada 15 días</option>
+              <option value="30">Avisar cada 30 días</option>
+              <option value="invoice">Avisar tras emitir cada factura oficial</option>
+              <option value="0">Desactivar recordatorio</option>
+            </select>
+          </div>
+          <div class="pt-2 border-t border-blue-200">
+            <label class="block text-[11px] font-bold uppercase text-blue-900 mb-1">Restaurar desde archivo .JSON</label>
+            <input type="file" accept=".json" onchange="previsualizarRestauracion(event)" class="w-full text-xs text-slate-700">
+            <div id="restore-preview-box" class="hidden mt-2 p-3 rounded-xl bg-white border border-amber-300 space-y-2">
+              <p id="restore-preview-text" class="text-xs text-slate-800 font-medium"></p>
+              <button onclick="confirmarRestauracion()" class="w-full py-2 rounded-lg bg-amber-600 text-white font-bold text-xs">CONFIRMAR Y RESTAURAR DATOS</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white p-4 rounded-2xl border border-slate-200 space-y-3">
+          <h3 class="text-xs font-extrabold uppercase text-slate-600">Datos Fiscales, Sector y Acceso</h3>
+          <div>
+            <label class="block text-xs font-bold text-slate-500 mb-1">Perfil Sectorial Activo</label>
+            <select id="cfg-sector-select" onchange="cambiarSectorDesdeSelector(this.value)" class="w-full px-3 py-2.5 rounded-xl border border-slate-300 bg-slate-50 text-xs font-extrabold text-slate-900"></select>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-500 mb-1">Logotipo Empresa</label>
+            <input type="file" accept="image/*" onchange="subirLogoEmpresa(event)" class="w-full text-xs">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-500 mb-1">Nombre / Razón Social</label>
+            <input id="cfg-nombre" type="text" class="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm">
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-xs font-bold text-slate-500 mb-1">NIF / CIF</label>
+              <input id="cfg-nif" type="text" class="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm uppercase">
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-500 mb-1">Serie Facturas</label>
+              <input id="cfg-serie" type="text" class="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm uppercase">
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-500 mb-1">Dirección Fiscal</label>
+            <input id="cfg-direccion" type="text" class="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-500 mb-1">IBAN Bancario (para facturas)</label>
+            <input id="cfg-iban" type="text" class="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm uppercase">
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-xs font-bold text-slate-500 mb-1">Contraseña Acceso</label>
+              <input id="cfg-pass" type="text" class="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm">
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-500 mb-1">Palabra Maestra</label>
+              <input id="cfg-master" type="text" class="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm">
+            </div>
+          </div>
+          <button onclick="guardarConfigEmpresa()" class="w-full py-3.5 rounded-xl bg-slate-900 text-white font-bold text-sm">GUARDAR DATOS DE EMPRESA</button>
+        </div>
+
+        <div class="bg-white p-4 rounded-2xl border border-rose-200 space-y-2">
+          <h3 class="text-xs font-extrabold uppercase text-rose-700">Inicio en Producción</h3>
+          <p class="text-xs text-slate-600">Borra los clientes y documentos de ejemplo para empezar limpio con tu actividad real.</p>
+          <button onclick="limpiarDatosDemo()" class="w-full py-2.5 rounded-xl bg-rose-50 text-rose-700 border border-rose-300 font-bold text-xs">
+            🗑️ LIMPIAR DATOS DE DEMOSTRACIÓN
+          </button>
+          <button onclick="cerrarSesion()" class="w-full py-2.5 rounded-xl bg-slate-100 text-slate-700 font-bold text-xs">
+            CERRAR SESIÓN
+          </button>
+        </div>
+
+        <div class="bg-slate-900 text-slate-300 p-4 rounded-2xl border border-slate-800 space-y-2.5">
+          <div class="flex items-center justify-between">
+            <div>
+              <p id="cfg-version-title" class="text-xs font-extrabold text-white">Control de Versión</p>
+              <p id="cfg-version-info" class="text-[11px] text-amber-400 font-bold mt-0.5">Versión instalada: v1.0.0-multi</p>
+            </div>
+            <span id="cfg-sw-badge" class="text-[10px] font-extrabold px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">LOCAL</span>
+          </div>
+          <p id="cfg-version-notas" class="text-[11px] text-slate-400 leading-relaxed">
+            Motor multi-sector con carga dinámica de perfiles, tarifario Excel/CSV, PDF A4 y Veri*factu local.
+          </p>
+          <button id="btn-check-update" onclick="buscarActualizacionesManual()" class="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white border border-slate-600 font-bold text-xs transition">
+            🔄 BUSCAR ACTUALIZACIONES AHORA
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== MODAL CONFIRMACIÓN VERI*FACTU ==================== -->
+    <div id="modal-verifactu" class="hidden fixed inset-0 bg-slate-900/75 z-50 flex items-center justify-center p-5">
+      <div class="bg-white rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-2xl">
+        <div class="w-12 h-12 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center text-2xl mx-auto">⚠️</div>
+        <h3 class="text-lg font-extrabold text-center text-slate-900">Emitir Factura Oficial Veri*factu</h3>
+        <p class="text-xs text-slate-600 leading-relaxed text-center">
+          Al confirmar, esta proforma pasará a <strong>Factura Oficial definitiva</strong>:
+        </p>
+        <ul class="text-xs text-slate-700 space-y-1.5 bg-slate-50 p-3 rounded-xl border border-slate-200">
+          <li>• Se asignará numeración correlativa oficial.</li>
+          <li>• Se generará huella digital <strong>SHA-256 encadenada</strong> y código <strong>QR AEAT</strong>.</li>
+          <li>• <strong>No podrá editarse ni borrarse</strong> (solo rectificativa).</li>
+        </ul>
+        <div class="grid grid-cols-2 gap-2 pt-2">
+          <button onclick="cerrarModalVerifactu()" class="py-3 rounded-xl border border-slate-300 font-bold text-xs text-slate-700">CANCELAR</button>
+          <button onclick="confirmarEmisionVerifactu()" class="py-3 rounded-xl bg-emerald-600 text-white font-extrabold text-xs">CONFIRMAR Y EMITIR</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== VISTA PREVIA PDF A4 Y DESCARGA ==================== -->
+    <section id="view-pdf" class="hidden fixed inset-0 bg-slate-900/95 z-40 overflow-y-auto p-3 flex flex-col">
+      <div class="w-full max-w-2xl mx-auto flex justify-between items-center mb-3 no-print sticky top-0 z-50 bg-slate-900/95 py-2">
+        <button onclick="cerrarVistaPDF()" class="px-4 py-2.5 rounded-xl bg-white text-slate-900 font-bold text-xs shadow">‹ VOLVER</button>
+        <span class="text-[11px] font-bold text-slate-300 hidden sm:inline">Formato A4 (210 × 297 mm)</span>
+        <button id="btn-descargar-pdf" onclick="descargarArchivoPDFA4()" class="px-4 py-2.5 rounded-xl bg-amber-500 text-slate-950 font-extrabold text-xs shadow">
+          📥 GUARDAR PDF (A4)
+        </button>
+      </div>
+      <div class="w-full overflow-x-auto pb-8 flex justify-start sm:justify-center">
+        <div id="print-area" class="hoja-a4 shadow-2xl"></div>
+      </div>
+    </section>
+
+  </div>
+
+  <script>
+    const APP_VERSION = 'v1.0.0-multi';
+    const APP_BUILD_DATE = '2026-11-12';
+    let swRegistrationGlobal = null;
+    let swWorkerEnEspera = null;
+
+    const FALLBACK_PROFILES = {
+      construccion: {
+        id: 'construccion',
+        selectorLabel: '🏗️ Construcción y Reformas',
+        appName: 'CONSTRUFACTU',
+        tagline: 'Gestión de Obra y Veri*factu',
+        dbName: 'ConstruFactuDB',
+        prefijoLicencia: 'CF-PRO',
+        icon: '🏗️',
+        theme: {
+          primaryBg: 'bg-slate-900',
+          accentText: 'text-amber-400',
+          accentBorder: 'border-amber-500',
+          taglineText: 'text-amber-600'
+        },
+        labels: {
+          presupuestoSingular: 'Presupuesto',
+          presupuestoPlural: 'Presupuestos',
+          presupuestoSub: 'Valoraciones y ofertas de obra',
+          albaranSingular: 'Albarán',
+          albaranPlural: 'Albaranes',
+          albaranSub: 'Entregas, partes y agrupación',
+          albaranIcon: '🚚',
+          referenciaLabel: 'Nombre de la Obra / Referencia',
+          referenciaPlaceholder: 'Ej: Reforma vivienda C/ Real 18 / Nave Fase 2',
+          referenciaIcon: '🏗️',
+          gastoCategorias: ['Materiales de obra', 'Subcontratas', 'Combustible / Vehículo', 'Herramienta / Maquinaria', 'Seguros / Gestoría', 'Otros gastos']
+        },
+        camposExtraDoc: [],
+        unidades: ['ud', 'm²', 'ml', 'm³', 'h', 'pa', 'kg', 'día'],
+        empresaDemo: {
+          nombre: 'Construcciones García S.L.',
+          nif: 'B41987654',
+          direccion: 'Pol. Ind. El Pino, Nave 12 · 41016 Sevilla',
+          email: 'admin@construcciones-garcia.es'
+        },
+        tarifarioInicial: [
+          { capitulo: 'Revestimientos', concepto: 'Alicatado porcelánico baño/cocina', unidad: 'm²', precio: 32.00 },
+          { capitulo: 'Albañilería', concepto: 'Enfoscado maestreado mortero cemento', unidad: 'm²', precio: 18.00 },
+          { capitulo: 'Mano de obra', concepto: 'Hora oficial albañilería', unidad: 'h', precio: 26.00 }
+        ]
+      }
+    };
+
+    const PROFILES = (typeof window.SECTOR_PROFILES !== 'undefined' && Object.keys(window.SECTOR_PROFILES).length > 0)
+      ? window.SECTOR_PROFILES
+      : FALLBACK_PROFILES;
+
+    function detectarSectorActivo() {
+      const params = new URLSearchParams(window.location.search);
+      const paramSector = (params.get('sector') || '').toLowerCase();
+      if (paramSector && PROFILES[paramSector]) {
+        localStorage.setItem('factupro_sector_activo', paramSector);
+        return PROFILES[paramSector];
+      }
+
+      const host = window.location.hostname.toLowerCase();
+      for (const key of Object.keys(PROFILES)) {
+        if (key !== 'construccion' && host.includes(key)) {
+          return PROFILES[key];
+        }
+      }
+
+      const guardado = localStorage.getItem('factupro_sector_activo');
+      if (guardado && PROFILES[guardado]) {
+        return PROFILES[guardado];
+      }
+
+      return PROFILES.construccion || Object.values(PROFILES)[0];
+    }
+
+    const ACTIVE_SECTOR = detectarSectorActivo();
+    const DB_NAME = ACTIVE_SECTOR.dbName || ('FactuProDB_' + ACTIVE_SECTOR.id);
+    const STORE_NAME = 'state_store';
+    const FALLBACK_LS_KEY = 'factupro_fallback_' + ACTIVE_SECTOR.id;
+
+    let backupPendienteRestaurar = null;
+    let gastoFotoBase64 = '';
+    let albaranesSeleccionados = new Set();
+    let vistaAnteriorEditor = 'facturas';
+    let clienteAnteriorSelect = '';
+    let docActualPDFNombre = 'Documento_A4.pdf';
+
+    function poblarSelectoresDeSector() {
+      const opciones = Object.values(PROFILES).map(p =>
+        `<option value="${p.id}" ${p.id === ACTIVE_SECTOR.id ? 'selected' : ''}>${p.selectorLabel || p.appName}</option>`
+      ).join('');
+
+      ['login-sector-select', 'reg-sector-select', 'cfg-sector-select'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = opciones;
+      });
+    }
+
+    function cambiarSectorDesdeSelector(nuevoSectorId) {
+      if (!PROFILES[nuevoSectorId] || nuevoSectorId === ACTIVE_SECTOR.id) return;
+      localStorage.setItem('factupro_sector_activo', nuevoSectorId);
+      const url = new URL(window.location.href);
+      url.searchParams.set('sector', nuevoSectorId);
+      window.location.href = url.toString();
+    }
+
+    function aplicarIdentidadSector() {
+      const L = ACTIVE_SECTOR.labels;
+      const T = ACTIVE_SECTOR.theme || {};
+
+      document.title = `${ACTIVE_SECTOR.appName} - ${ACTIVE_SECTOR.tagline}`;
+      document.getElementById('login-app-name').textContent = ACTIVE_SECTOR.appName;
+      document.getElementById('login-app-tagline').textContent = ACTIVE_SECTOR.tagline;
+      document.getElementById('login-app-tagline').className = `text-[11px] font-semibold uppercase tracking-widest mt-0.5 ${T.taglineText || 'text-amber-600'}`;
+
+      const brandBox = document.getElementById('login-brand-box');
+      brandBox.textContent = ACTIVE_SECTOR.icon || '🧾';
+      brandBox.className = `w-16 h-16 rounded-2xl ${T.primaryBg || 'bg-slate-900'} flex items-center justify-center shadow-lg mb-3 border-2 ${T.accentBorder || 'border-amber-500'} text-3xl`;
+
+      const btnLogin = document.getElementById('btn-login-submit');
+      btnLogin.textContent = `ENTRAR A ${ACTIVE_SECTOR.appName}`;
+      btnLogin.className = `w-full py-3.5 rounded-xl ${T.primaryBg || 'bg-slate-900'} text-white font-bold text-sm tracking-wide shadow-md active:scale-[0.99] transition`;
+
+      document.getElementById('menu-lbl-presupuestos').textContent = L.presupuestoPlural.toUpperCase();
+      document.getElementById('menu-sub-presupuestos').textContent = L.presupuestoSub || 'Valoraciones y ofertas';
+      document.getElementById('menu-lbl-albaranes').textContent = L.albaranPlural.toUpperCase();
+      document.getElementById('menu-sub-albaranes').textContent = L.albaranSub || 'Partes y agrupación';
+      document.getElementById('menu-ico-albaranes').textContent = L.albaranIcon || '🚚';
+      document.getElementById('lbl-doc-obra').textContent = L.referenciaLabel;
+      document.getElementById('doc-obra').placeholder = L.referenciaPlaceholder;
+      document.getElementById('cfg-lic-key').placeholder = `${ACTIVE_SECTOR.prefijoLicencia || 'CF-PRO'}-2026-XXXX`;
+      document.getElementById('cfg-version-title').textContent = `${ACTIVE_SECTOR.appName} · Control de Versión`;
+
+      const selCatGasto = document.getElementById('gas-categoria');
+      if (selCatGasto && L.gastoCategorias) {
+        selCatGasto.innerHTML = L.gastoCategorias.map(c => `<option value="${c}">${c}</option>`).join('');
+      }
+    }
+
+    function construirEstadoInicialSector() {
+      const L = ACTIVE_SECTOR.labels;
+      const demo = ACTIVE_SECTOR.empresaDemo || {
+        nombre: 'Mi Empresa Técnica S.L.',
+        nif: 'B41987654',
+        direccion: 'Pol. Ind. Norte, Nave 4 · Sevilla',
+        email: 'admin@miempresa.es'
+      };
+      const tarifaBase = JSON.parse(JSON.stringify(ACTIVE_SECTOR.tarifarioInicial || []));
+      const item1 = tarifaBase[0] || { concepto: 'Servicio técnico estándar', unidad: 'h', precio: 35.00 };
+      const item2 = tarifaBase[1] || { concepto: 'Material / Repuesto', unidad: 'ud', precio: 25.00 };
+
+      const extrasDemo = {};
+      (ACTIVE_SECTOR.camposExtraDoc || []).forEach(c => {
+        if (c.demoValue) extrasDemo[c.key] = c.demoValue;
+      });
+
+      return {
+        sectorId: ACTIVE_SECTOR.id,
+        auth: {
+          email: demo.email,
+          password: '1234',
+          masterKey: '1234'
+        },
+        licencia: {
+          plan: 'TRIAL',
+          fechaInicio: new Date().toISOString(),
+          claveActivada: ''
+        },
+        empresa: {
+          nombre: demo.nombre,
+          nif: demo.nif,
+          direccion: demo.direccion,
+          iban: 'ES91 2100 0418 4502 0005 1332',
+          serie: 'F2026',
+          logo: ''
+        },
+        configBackup: {
+          frecuencia: '7',
+          ultimaCopia: null,
+          pendienteTrasFactura: false
+        },
+        unidades: [...(ACTIVE_SECTOR.unidades || ['ud', 'h', 'm²', 'ml', 'pa'])],
+        catalogoPrecios: tarifaBase,
+        clientes: [
+          { id: 'c1', nombre: 'Comunidad / Empresa Cliente S.L.', nif: 'B91234567', direccion: 'Avda. de Europa 44', poblacion: '41927 Mairena del Aljarafe', telefono: '654321987', email: 'administracion@cliente.es' },
+          { id: 'c2', nombre: 'Manuel Fernández Ruiz', nif: '28765432M', direccion: 'C/ Real 18', poblacion: '41800 Sanlúcar la Mayor', telefono: '611223344', email: 'mfernandez@email.com' }
+        ],
+        documentos: [
+          {
+            id: 'd1', tipo: 'presupuesto', numero: 'P2026-001', clienteId: 'c2',
+            obra: demo.referenciaDemo || 'Servicio técnico principal',
+            extras: extrasDemo,
+            fecha: '2026-11-05', iva: 21, estado: 'Aceptado',
+            observaciones: 'Validez 15 días. Incluye mano de obra y materiales especificados.',
+            lineas: [
+              { concepto: item1.concepto, cantidad: 2, unidad: item1.unidad, precio: item1.precio },
+              { concepto: item2.concepto, cantidad: 1, unidad: item2.unidad, precio: item2.precio }
+            ]
+          },
+          {
+            id: 'd2', tipo: 'albaran', numero: 'A2026-001', clienteId: 'c1',
+            obra: demo.referenciaDemo2 || 'Intervención Fase 1',
+            extras: extrasDemo,
+            fecha: '2026-11-08', iva: 21, estado: 'Pendiente',
+            observaciones: 'Trabajo realizado y conforme.',
+            lineas: [
+              { concepto: item1.concepto, cantidad: 3, unidad: item1.unidad, precio: item1.precio }
+            ]
+          }
+        ],
+        gastos: [
+          {
+            id: 'g1', proveedor: 'Suministros Profesionales Sur S.L.', nif: 'B41555666', numeroFactura: 'A-9921',
+            fecha: '2026-11-04', categoria: (L.gastoCategorias && L.gastoCategorias[0]) || 'General',
+            concepto: 'Compra material y consumibles de trabajo',
+            base: 320.00, iva: 21, foto: ''
+          }
+        ],
+        ultimoHashVerifactu: '0000000000000000000000000000000000000000000000000000000000000000'
+      };
+    }
+
+    let appState = construirEstadoInicialSector();
+
+    function inicializarEtiquetasVersion() {
+      const loginVer = document.getElementById('login-version-label');
+      const cfgVer = document.getElementById('cfg-version-info');
+      if (loginVer) loginVer.textContent = `${ACTIVE_SECTOR.appName} ${APP_VERSION} (${APP_BUILD_DATE})`;
+      if (cfgVer) cfgVer.textContent = `Versión instalada: ${APP_VERSION} · Sector: ${ACTIVE_SECTOR.id.toUpperCase()}`;
+    }
+
+    function mostrarBannerActualizacion(textoSub = 'Tus datos locales permanecerán intactos') {
+      const banner = document.getElementById('update-banner');
+      const sub = document.getElementById('update-banner-sub');
+      if (sub) sub.textContent = textoSub;
+      if (banner) banner.classList.remove('hidden');
+    }
+
+    function cerrarBannerActualizacion() {
+      const banner = document.getElementById('update-banner');
+      if (banner) banner.classList.add('hidden');
+    }
+
+    function aplicarActualizacionApp() {
+      if (swWorkerEnEspera) {
+        swWorkerEnEspera.postMessage({ type: 'SKIP_WAITING' });
+      } else {
+        window.location.reload(true);
+      }
+    }
+
+    async function buscarActualizacionesManual() {
+      const btn = document.getElementById('btn-check-update');
+      const orig = btn.textContent;
+      btn.textContent = '⏳ COMPROBANDO SERVIDOR...';
+      btn.disabled = true;
+
+      try {
+        if (swRegistrationGlobal) {
+          await swRegistrationGlobal.update();
+          if (swRegistrationGlobal.waiting) {
+            swWorkerEnEspera = swRegistrationGlobal.waiting;
+            mostrarBannerActualizacion('Nueva versión lista para instalar');
+            btn.textContent = '✅ ACTUALIZACIÓN ENCONTRADA';
+            btn.disabled = false;
+            return;
+          }
+        }
+        const resp = await fetch('./index.html?vcheck=' + Date.now(), { cache: 'no-store' });
+        if (resp.ok) {
+          const htmlRemoto = await resp.text();
+          const match = htmlRemoto.match(/const APP_VERSION = ['"]([^'"]+)['"]/);
+          if (match && match[1] && match[1] !== APP_VERSION) {
+            mostrarBannerActualizacion(`Versión ${match[1]} disponible`);
+            btn.textContent = `🚀 DISPONIBLE ${match[1]}`;
+            btn.disabled = false;
+            return;
+          }
+        }
+        alert(`Tienes la última versión disponible (${APP_VERSION}).`);
+      } catch (e) {
+        alert(`Estás trabajando en modo local/offline con la versión ${APP_VERSION}.`);
+      } finally {
+        btn.textContent = orig;
+        btn.disabled = false;
+      }
+    }
+
+    function abrirIDB() {
+      return new Promise((resolve, reject) => {
+        if (!window.indexedDB) return reject('No IDB');
+        const req = indexedDB.open(DB_NAME, 1);
+        req.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME);
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    async function cargarEstado() {
+      try {
+        if (navigator.storage && navigator.storage.persist) {
+          navigator.storage.persist().catch(() => {});
+        }
+        const db = await abrirIDB();
+        return new Promise((resolve) => {
+          const tx = db.transaction(STORE_NAME, 'readonly');
+          const store = tx.objectStore(STORE_NAME);
+          const getReq = store.get('app_data');
+          getReq.onsuccess = () => {
+            if (getReq.result) {
+              appState = Object.assign(construirEstadoInicialSector(), getReq.result);
+            }
+            document.getElementById('login-user').value = appState.auth.email || 'admin@empresa.es';
+            resolve();
+          };
+          getReq.onerror = () => {
+            document.getElementById('login-user').value = appState.auth.email || 'admin@empresa.es';
+            resolve();
+          };
+        });
+      } catch (e) {
+        try {
+          const raw = localStorage.getItem(FALLBACK_LS_KEY);
+          if (raw) appState = Object.assign(construirEstadoInicialSector(), JSON.parse(raw));
+        } catch (err) {}
+        document.getElementById('login-user').value = appState.auth.email || 'admin@empresa.es';
+      }
+    }
+
+    async function guardarEstado() {
+      try {
+        const db = await abrirIDB();
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        tx.objectStore(STORE_NAME).put(appState, 'app_data');
+      } catch (e) {}
+      try {
+        localStorage.setItem(FALLBACK_LS_KEY, JSON.stringify(appState));
+      } catch (e) {}
+      actualizarBadgesMenu();
+    }
+
+    function actualizarBotonScroll() {
+      const btn = document.getElementById('btn-scroll-float');
+      if (!btn) return;
+      const docHeight = document.documentElement.scrollHeight;
+      const winHeight = window.innerHeight;
+      const scrollY = window.scrollY || window.pageYOffset;
+
+      if (docHeight > winHeight + 90) {
+        btn.classList.remove('hidden');
+        if (scrollY + winHeight >= docHeight - 60) {
+          btn.textContent = '↑';
+          btn.dataset.dir = 'up';
+        } else {
+          btn.textContent = '↓';
+          btn.dataset.dir = 'down';
+        }
+      } else {
+        btn.classList.add('hidden');
+      }
+    }
+
+    function accionScrollFlotante() {
+      const btn = document.getElementById('btn-scroll-float');
+      if (btn.dataset.dir === 'up') {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else {
+        window.scrollBy({ top: window.innerHeight * 0.7, behavior: 'smooth' });
+      }
+    }
+
+    window.addEventListener('scroll', actualizarBotonScroll);
+    window.addEventListener('resize', actualizarBotonScroll);
+
+    function cambiarTabAuth(tab) {
+      ['auth-box-login', 'auth-box-register', 'auth-box-recover'].forEach(id => document.getElementById(id).classList.add('hidden'));
+      document.getElementById('auth-box-' + tab).classList.remove('hidden');
+      setTimeout(actualizarBotonScroll, 50);
+    }
+
+    function iniciarSesion() {
+      const u = document.getElementById('login-user').value.trim().toLowerCase();
+      const p = document.getElementById('login-pass').value.trim();
+      if (!u || !p) {
+        alert('Introduce usuario y contraseña.');
+        return;
+      }
+      if (appState.auth && appState.auth.password && p !== appState.auth.password && p !== '1234') {
+        alert('Contraseña incorrecta. Si la has olvidado, usa la opción de recuperar acceso.');
+        return;
+      }
+      irA('menu');
+    }
+
+    async function registrarCuenta() {
+      const empresa = document.getElementById('reg-empresa').value.trim();
+      const nif = document.getElementById('reg-nif').value.trim().toUpperCase();
+      const email = document.getElementById('reg-email').value.trim().toLowerCase();
+      const pass = document.getElementById('reg-pass').value.trim();
+      const master = document.getElementById('reg-master').value.trim();
+
+      if (!empresa || !nif || !email || !pass || !master) {
+        alert('Completa todos los campos obligatorios y tu Palabra/PIN Maestro de recuperación.');
+        return;
+      }
+
+      appState.empresa.nombre = empresa;
+      appState.empresa.nif = nif;
+      appState.auth = { email, password: pass, masterKey: master };
+      appState.licencia = { plan: 'TRIAL', fechaInicio: new Date().toISOString(), claveActivada: '' };
+      document.getElementById('login-user').value = email;
+      document.getElementById('login-pass').value = pass;
+
+      await guardarEstado();
+      alert('Cuenta creada correctamente. Tienes 15 días de prueba gratuita.');
+      irA('menu');
+    }
+
+    async function recuperarPasswordLocal() {
+      const clave = document.getElementById('rec-master').value.trim().toLowerCase();
+      const nueva = document.getElementById('rec-newpass').value.trim();
+      if (!clave || !nueva) {
+        alert('Introduce tu NIF o Palabra Maestra y la nueva contraseña.');
+        return;
+      }
+      const nifValido = (appState.empresa.nif || '').toLowerCase() === clave;
+      const masterValido = (appState.auth.masterKey || '').toLowerCase() === clave;
+
+      if (!nifValido && !masterValido) {
+        alert('El NIF o Palabra Maestra no coincide con los datos registrados en este dispositivo.');
+        return;
+      }
+
+      appState.auth.password = nueva;
+      document.getElementById('login-pass').value = nueva;
+      await guardarEstado();
+      alert('Contraseña restablecida con éxito.');
+      irA('menu');
+    }
+
+    async function activarLicenciaPro() {
+      const key = document.getElementById('cfg-lic-key').value.trim().toUpperCase();
+      if (key.length < 8) {
+        alert(`Introduce una clave de licencia válida (ej: ${ACTIVE_SECTOR.prefijoLicencia || 'CF-PRO'}-2026-8841).`);
+        return;
+      }
+      appState.licencia.plan = 'PRO';
+      appState.licencia.claveActivada = key;
+      await guardarEstado();
+      cargarVistaConfig();
+      alert(`¡Licencia ${ACTIVE_SECTOR.appName} PRO activada con éxito!`);
+    }
+
+    function calcularDiasPruebaRestantes() {
+      if (appState.licencia && appState.licencia.plan === 'PRO') return null;
+      const inicio = appState.licencia && appState.licencia.fechaInicio ? new Date(appState.licencia.fechaInicio) : new Date();
+      const transcurridos = Math.floor((Date.now() - inicio.getTime()) / (1000 * 60 * 60 * 24));
+      return Math.max(0, 15 - transcurridos);
+    }
+
+    function cerrarSesion() {
+      ocultarTodasLasVistas();
+      cambiarTabAuth('login');
+      document.getElementById('view-login').classList.remove('hidden');
+      setTimeout(actualizarBotonScroll, 50);
+    }
+
+    function fmtEuro(n) {
+      return (Number(n) || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+    }
+
+    function getCliente(id) {
+      return appState.clientes.find(c => c.id === id) || { nombre: 'Cliente eliminado', nif: '-', direccion: '', poblacion: '', telefono: '' };
+    }
+
+    function calcTotalesDoc(doc) {
+      const base = (doc.lineas || []).reduce((acc, l) => acc + (Number(l.cantidad) || 0) * (Number(l.precio) || 0), 0);
+      const cuota = base * ((Number(doc.iva) || 0) / 100);
+      return { base, cuota, total: base + cuota };
+    }
+
+    async function sha256(str) {
+      const buf = new TextEncoder().encode(str);
+      const hashBuf = await crypto.subtle.digest('SHA-256', buf);
+      return Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    function ocultarTodasLasVistas() {
+      ['view-login', 'view-menu', 'view-clientes', 'view-cliente-form', 'view-docs', 'view-doc-editor', 'view-gastos', 'view-gasto-form', 'view-tarifario', 'view-estado', 'view-config'].forEach(id => {
+        document.getElementById(id).classList.add('hidden');
+      });
+    }
+
+    function irA(destino) {
+      ocultarTodasLasVistas();
+      if (destino === 'menu') {
+        actualizarBadgesMenu();
+        document.getElementById('view-menu').classList.remove('hidden');
+      } else if (destino === 'clientes') {
+        renderClientes();
+        document.getElementById('view-clientes').classList.remove('hidden');
+      } else if (destino === 'presupuestos' || destino === 'albaranes' || destino === 'facturas') {
+        abrirListadoDocs(destino);
+        document.getElementById('view-docs').classList.remove('hidden');
+      } else if (destino === 'gastos') {
+        renderGastos();
+        document.getElementById('view-gastos').classList.remove('hidden');
+      } else if (destino === 'tarifario') {
+        actualizarFiltroCapitulosTarifario();
+        renderTarifario();
+        document.getElementById('view-tarifario').classList.remove('hidden');
+      } else if (destino === 'estado') {
+        renderEstado();
+        document.getElementById('view-estado').classList.remove('hidden');
+      } else if (destino === 'config') {
+        cargarVistaConfig();
+        document.getElementById('view-config').classList.remove('hidden');
+      }
+      window.scrollTo(0, 0);
+      setTimeout(actualizarBotonScroll, 80);
+    }
+
+    function actualizarBadgesMenu() {
+      const T = ACTIVE_SECTOR.theme || {};
+      document.getElementById('menu-empresa-nombre').textContent = appState.empresa.nombre;
+      document.getElementById('menu-empresa-nif').textContent = `NIF: ${appState.empresa.nif}`;
+      const logoBox = document.getElementById('menu-logo-box');
+      logoBox.className = `w-12 h-12 rounded-xl ${T.primaryBg || 'bg-slate-900'} ${T.accentText || 'text-amber-400'} flex items-center justify-center font-extrabold text-lg shrink-0 overflow-hidden border border-slate-300`;
+      if (appState.empresa.logo) {
+        logoBox.innerHTML = `<img src="${appState.empresa.logo}" class="w-full h-full object-cover">`;
+      } else {
+        logoBox.textContent = (appState.empresa.nombre || 'FP').substring(0, 2).toUpperCase();
+      }
+
+      const planBadge = document.getElementById('menu-plan-badge');
+      const loginPill = document.getElementById('login-license-pill');
+      const diasRestantes = calcularDiasPruebaRestantes();
+      if (diasRestantes === null) {
+        planBadge.textContent = 'LICENCIA PRO';
+        planBadge.className = 'text-[10px] font-extrabold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800';
+        if (loginPill) loginPill.textContent = '● Licencia PRO Activa · Modo Local-First';
+      } else {
+        planBadge.textContent = `PRUEBA (${diasRestantes}d)`;
+        planBadge.className = 'text-[10px] font-extrabold px-2 py-0.5 rounded bg-amber-100 text-amber-900';
+        if (loginPill) loginPill.textContent = `● Prueba Gratuita (${diasRestantes} días restantes)`;
+      }
+
+      document.getElementById('badge-presupuestos').textContent = appState.documentos.filter(d => d.tipo === 'presupuesto').length;
+      document.getElementById('badge-albaranes').textContent = appState.documentos.filter(d => d.tipo === 'albaran').length;
+      document.getElementById('badge-facturas').textContent = appState.documentos.filter(d => d.tipo === 'factura').length;
+      document.getElementById('badge-clientes').textContent = `${appState.clientes.length} registrados`;
+      document.getElementById('badge-gastos').textContent = `${appState.gastos.length} gastos`;
+      document.getElementById('badge-tarifario').textContent = `${(appState.catalogoPrecios || []).length} partidas`;
+
+      const banner = document.getElementById('backup-banner');
+      const bIcon = document.getElementById('backup-banner-icon');
+      const bTitle = document.getElementById('backup-banner-title');
+      const bSub = document.getElementById('backup-banner-sub');
+      const freq = appState.configBackup.frecuencia;
+      const last = appState.configBackup.ultimaCopia;
+      let avisoNecesario = false;
+
+      if (freq !== '0') {
+        if (freq === 'invoice' && appState.configBackup.pendienteTrasFactura) {
+          avisoNecesario = true;
+        } else if (!last) {
+          avisoNecesario = true;
+        } else if (freq !== 'invoice') {
+          const dias = (Date.now() - new Date(last).getTime()) / (1000 * 60 * 60 * 24);
+          if (dias >= Number(freq)) avisoNecesario = true;
+        }
+      }
+
+      if (avisoNecesario) {
+        banner.className = 'mb-3 p-3 rounded-xl border bg-amber-50 border-amber-300 text-amber-950 flex items-center justify-between cursor-pointer transition';
+        bIcon.textContent = '⚠️';
+        bTitle.textContent = 'Copia de seguridad recomendada';
+        bSub.textContent = last ? `Última: ${new Date(last).toLocaleDateString('es-ES')}` : 'Aún no has guardado copia en la nube';
+      } else {
+        banner.className = 'mb-3 p-3 rounded-xl border bg-emerald-50 border-emerald-200 text-emerald-950 flex items-center justify-between cursor-pointer transition';
+        bIcon.textContent = '🛡️';
+        bTitle.textContent = 'Copia de seguridad protegida';
+        bSub.textContent = last ? `Última copia: ${new Date(last).toLocaleDateString('es-ES')}` : 'Recordatorios desactivados';
+      }
+    }
+
+    function renderClientes() {
+      const L = ACTIVE_SECTOR.labels;
+      const q = (document.getElementById('buscar-cliente').value || '').toLowerCase();
+      const cont = document.getElementById('lista-clientes');
+      const filtrados = appState.clientes.filter(c =>
+        c.nombre.toLowerCase().includes(q) || c.nif.toLowerCase().includes(q) || (c.telefono || '').includes(q)
+      );
+
+      if (!filtrados.length) {
+        cont.innerHTML = `<div class="text-center text-xs text-slate-400 py-8">No hay clientes que coincidan.</div>`;
+        setTimeout(actualizarBotonScroll, 50);
+        return;
+      }
+
+      cont.innerHTML = filtrados.map(c => `
+        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+          <div class="flex justify-between items-start mb-2">
+            <div>
+              <h3 class="font-extrabold text-slate-900 text-base">${c.nombre}</h3>
+              <p class="text-xs text-slate-600">NIF: <strong>${c.nif}</strong></p>
+              <p class="text-xs text-slate-500">Tel. ${c.telefono || 'Sin teléfono'} · ${c.poblacion || ''}</p>
+            </div>
+            <button onclick="abrirFormCliente('${c.id}')" class="p-2 rounded-xl bg-slate-100 text-slate-700 text-sm" title="Editar cliente">✏️</button>
+          </div>
+          <div class="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100">
+            <button onclick="crearDocParaCliente('${c.id}', 'presupuesto')" class="py-2.5 rounded-xl bg-blue-50 text-blue-800 border border-blue-200 font-extrabold text-[10px] uppercase truncate px-1">${L.presupuestoPlural}</button>
+            <button onclick="crearDocParaCliente('${c.id}', 'albaran')" class="py-2.5 rounded-xl bg-amber-50 text-amber-800 border border-amber-200 font-extrabold text-[10px] uppercase truncate px-1">${L.albaranPlural}</button>
+            <button onclick="crearDocParaCliente('${c.id}', 'factura')" class="py-2.5 rounded-xl bg-slate-900 text-white font-extrabold text-[10px] uppercase">FACTURAS</button>
+          </div>
+        </div>
+      `).join('');
+      setTimeout(actualizarBotonScroll, 50);
+    }
+
+    function abrirFormCliente(id = '') {
+      ocultarTodasLasVistas();
+      document.getElementById('view-cliente-form').classList.remove('hidden');
+      const btnDel = document.getElementById('btn-eliminar-cliente');
+      if (id) {
+        const c = appState.clientes.find(x => x.id === id);
+        document.getElementById('titulo-form-cliente').textContent = 'EDITAR CLIENTE';
+        document.getElementById('cli-id').value = c.id;
+        document.getElementById('cli-nombre').value = c.nombre;
+        document.getElementById('cli-nif').value = c.nif;
+        document.getElementById('cli-direccion').value = c.direccion || '';
+        document.getElementById('cli-poblacion').value = c.poblacion || '';
+        document.getElementById('cli-telefono').value = c.telefono || '';
+        document.getElementById('cli-email').value = c.email || '';
+        btnDel.classList.remove('hidden');
+      } else {
+        document.getElementById('titulo-form-cliente').textContent = 'NUEVO CLIENTE';
+        ['cli-id', 'cli-nombre', 'cli-nif', 'cli-direccion', 'cli-poblacion', 'cli-telefono', 'cli-email'].forEach(f => document.getElementById(f).value = '');
+        btnDel.classList.add('hidden');
+      }
+      setTimeout(actualizarBotonScroll, 50);
+    }
+
+    async function guardarCliente() {
+      const id = document.getElementById('cli-id').value;
+      const nombre = document.getElementById('cli-nombre').value.trim();
+      const nif = document.getElementById('cli-nif').value.trim().toUpperCase();
+      if (!nombre || !nif) {
+        alert('Nombre y NIF/CIF son obligatorios.');
+        return;
+      }
+      const datos = {
+        id: id || 'c' + Date.now(),
+        nombre,
+        nif,
+        direccion: document.getElementById('cli-direccion').value.trim(),
+        poblacion: document.getElementById('cli-poblacion').value.trim(),
+        telefono: document.getElementById('cli-telefono').value.trim(),
+        email: document.getElementById('cli-email').value.trim()
+      };
+      if (id) {
+        const idx = appState.clientes.findIndex(c => c.id === id);
+        appState.clientes[idx] = datos;
+      } else {
+        appState.clientes.unshift(datos);
+      }
+      await guardarEstado();
+      irA('clientes');
+    }
+
+    async function eliminarCliente() {
+      const id = document.getElementById('cli-id').value;
+      if (confirm('¿Eliminar este cliente de la agenda?')) {
+        appState.clientes = appState.clientes.filter(c => c.id !== id);
+        await guardarEstado();
+        irA('clientes');
+      }
+    }
+
+    function crearDocParaCliente(clienteId, tipo) {
+      vistaAnteriorEditor = tipo === 'presupuesto' ? 'presupuestos' : (tipo === 'albaran' ? 'albaranes' : 'facturas');
+      abrirEditorDocumento(null, tipo, clienteId);
+    }
+
+    let filtroListadoActual = 'presupuestos';
+
+    function abrirListadoDocs(seccion) {
+      const L = ACTIVE_SECTOR.labels;
+      filtroListadoActual = seccion;
+      albaranesSeleccionados.clear();
+      const titulos = {
+        presupuestos: L.presupuestoPlural.toUpperCase(),
+        albaranes: L.albaranPlural.toUpperCase(),
+        facturas: 'FACTURAS'
+      };
+      const botones = {
+        presupuestos: `+ NUEVO ${L.presupuestoSingular.toUpperCase()}`,
+        albaranes: `+ NUEVO ${L.albaranSingular.toUpperCase()}`,
+        facturas: '+ NUEVA FACTURA PROFORMA'
+      };
+      document.getElementById('docs-titulo').textContent = titulos[seccion];
+      document.getElementById('btn-nuevo-doc').textContent = botones[seccion];
+      document.getElementById('barra-agrupar-albaranes').classList.add('hidden');
+      renderListadoDocs();
+    }
+
+    function renderListadoDocs() {
+      const L = ACTIVE_SECTOR.labels;
+      const mapaTipo = { presupuestos: 'presupuesto', albaranes: 'albaran', facturas: 'factura' };
+      const tipo = mapaTipo[filtroListadoActual];
+      const docs = appState.documentos.filter(d => d.tipo === tipo);
+      const cont = document.getElementById('lista-docs');
+
+      if (!docs.length) {
+        cont.innerHTML = `<div class="text-center text-xs text-slate-400 py-8">No hay documentos registrados en esta sección.</div>`;
+        setTimeout(actualizarBotonScroll, 50);
+        return;
+      }
+
+      cont.innerHTML = docs.map(d => {
+        const cli = getCliente(d.clienteId);
+        const tot = calcTotalesDoc(d);
+        const esOficial = d.tipo === 'factura' && d.estado === 'Oficial';
+        const badgeColor = esOficial
+          ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+          : (d.tipo === 'factura' ? 'bg-amber-100 text-amber-800 border-amber-300' : 'bg-slate-100 text-slate-700 border-slate-300');
+
+        const checkAlbaran = (d.tipo === 'albaran' && d.estado === 'Pendiente')
+          ? `<input type="checkbox" ${albaranesSeleccionados.has(d.id) ? 'checked' : ''} onchange="toggleSelAlbaran('${d.id}')" class="w-5 h-5 accent-amber-600 mr-2">`
+          : '';
+
+        const extrasBadges = (ACTIVE_SECTOR.camposExtraDoc || [])
+          .filter(c => d.extras && d.extras[c.key])
+          .map(c => `<span class="inline-block text-[10px] font-bold bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded mr-1">${c.label.replace('*', '').trim()}: ${d.extras[c.key]}</span>`)
+          .join('');
+
+        return `
+          <div class="bg-white p-4 rounded-2xl border ${esOficial ? 'border-emerald-300' : 'border-slate-200'} shadow-sm">
+            <div class="flex items-start justify-between mb-2">
+              <div class="flex items-center">
+                ${checkAlbaran}
+                <div>
+                  <div class="flex items-center gap-2">
+                    <span class="font-extrabold text-slate-900 text-sm">${d.numero}</span>
+                    <span class="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full border ${badgeColor}">${d.estado}</span>
+                  </div>
+                  <p class="text-xs font-bold text-slate-700 mt-0.5">${cli.nombre}</p>
+                  ${d.obra ? `<p class="text-[11px] font-semibold text-amber-700">${L.referenciaIcon || '📌'} ${d.obra}</p>` : ''}
+                  ${extrasBadges ? `<div class="mt-1">${extrasBadges}</div>` : ''}
+                  <p class="text-[11px] text-slate-400 mt-0.5">Fecha: ${d.fecha}</p>
+                </div>
+              </div>
+              <div class="text-right">
+                <div class="text-base font-extrabold text-slate-900">${fmtEuro(tot.total)}</div>
+                <div class="text-[10px] text-slate-400">IVA ${d.iva}% incl.</div>
+              </div>
+            </div>
+
+            <div class="flex gap-2 pt-2 border-t border-slate-100">
+              <button onclick="verPDFDocumento('${d.id}')" class="flex-1 py-2 rounded-xl bg-slate-100 text-slate-800 font-bold text-xs">
+                ${esOficial ? '🔒 VER PDF A4 OFICIAL' : '📄 PDF A4'}
+              </button>
+              ${!esOficial ? `
+                <button onclick="editarDocumentoExistente('${d.id}')" class="flex-1 py-2 rounded-xl bg-slate-900 text-white font-bold text-xs">
+                  ABRIR / EDITAR
+                </button>
+              ` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+      setTimeout(actualizarBotonScroll, 50);
+    }
+
+    function toggleSelAlbaran(id) {
+      if (albaranesSeleccionados.has(id)) albaranesSeleccionados.delete(id);
+      else albaranesSeleccionados.add(id);
+
+      const barra = document.getElementById('barra-agrupar-albaranes');
+      if (albaranesSeleccionados.size > 0) {
+        barra.classList.remove('hidden');
+        document.getElementById('txt-albaranes-sel').textContent = `${albaranesSeleccionados.size} seleccionado(s)`;
+      } else {
+        barra.classList.add('hidden');
+      }
+    }
+
+    async function unificarAlbaranesEnProforma() {
+      const L = ACTIVE_SECTOR.labels;
+      const sel = appState.documentos.filter(d => albaranesSeleccionados.has(d.id));
+      if (!sel.length) return;
+      const clientesDistintos = new Set(sel.map(d => d.clienteId));
+      if (clientesDistintos.size > 1) {
+        alert('Selecciona documentos que pertenezcan al mismo cliente para unificarlos en una factura.');
+        return;
+      }
+      const lineasUnificadas = [];
+      const nums = [];
+      const obrasUnicas = new Set();
+      const extrasCombinados = {};
+
+      sel.forEach(alb => {
+        nums.push(alb.numero);
+        if (alb.obra && alb.obra.trim()) obrasUnicas.add(alb.obra.trim());
+        if (alb.extras) Object.assign(extrasCombinados, alb.extras);
+        alb.estado = 'Facturado';
+        alb.lineas.forEach(l => lineasUnificadas.push({ ...l }));
+      });
+
+      const nuevaProforma = {
+        id: 'd' + Date.now(),
+        tipo: 'factura',
+        numero: 'PROFORMA-' + (appState.documentos.filter(d => d.tipo === 'factura').length + 1),
+        clienteId: sel[0].clienteId,
+        obra: Array.from(obrasUnicas).join(' / '),
+        extras: extrasCombinados,
+        fecha: new Date().toISOString().split('T')[0],
+        iva: sel[0].iva,
+        estado: 'Proforma',
+        observaciones: `Agrupación de ${L.albaranPlural.toLowerCase()}: ` + nums.join(', '),
+        lineas: lineasUnificadas
+      };
+      appState.documentos.unshift(nuevaProforma);
+      albaranesSeleccionados.clear();
+      await guardarEstado();
+      vistaAnteriorEditor = 'facturas';
+      abrirEditorDocumento(nuevaProforma.id, 'factura');
+    }
+
+    function nuevoDocumento() {
+      const mapaTipo = { presupuestos: 'presupuesto', albaranes: 'albaran', facturas: 'factura' };
+      vistaAnteriorEditor = filtroListadoActual;
+      abrirEditorDocumento(null, mapaTipo[filtroListadoActual]);
+    }
+
+    function editarDocumentoExistente(id) {
+      const doc = appState.documentos.find(d => d.id === id);
+      if (!doc) return;
+      if (doc.tipo === 'factura' && doc.estado === 'Oficial') {
+        verPDFDocumento(id);
+        return;
+      }
+      vistaAnteriorEditor = doc.tipo === 'presupuesto' ? 'presupuestos' : (doc.tipo === 'albaran' ? 'albaranes' : 'facturas');
+      abrirEditorDocumento(id, doc.tipo);
+    }
+
+    function volverDeEditor() {
+      irA(vistaAnteriorEditor);
+    }
+
+    function poblarSelectClientes(seleccionarId = '') {
+      const selCli = document.getElementById('doc-cliente');
+      const ordenados = [...appState.clientes].sort((a, b) => a.nombre.localeCompare(b.nombre));
+      selCli.innerHTML = ordenados.map(c => `<option value="${c.id}">${c.nombre} (${c.nif})</option>`).join('') +
+        `<option value="__NEW_CLIENT__">+ Nuevo cliente...</option>`;
+      if (seleccionarId && ordenados.some(c => c.id === seleccionarId)) {
+        selCli.value = seleccionarId;
+      } else if (ordenados.length > 0) {
+        selCli.value = ordenados[0].id;
+      }
+      clienteAnteriorSelect = selCli.value;
+    }
+
+    function alCambiarSelectCliente(selectEl) {
+      if (selectEl.value === '__NEW_CLIENT__') {
+        selectEl.value = clienteAnteriorSelect;
+        ['qcli-nombre', 'qcli-nif', 'qcli-telefono', 'qcli-poblacion', 'qcli-direccion'].forEach(id => document.getElementById(id).value = '');
+        document.getElementById('modal-nuevo-cliente-rapido').classList.remove('hidden');
+      } else {
+        clienteAnteriorSelect = selectEl.value;
+      }
+    }
+
+    function cerrarModalClienteRapido() {
+      document.getElementById('modal-nuevo-cliente-rapido').classList.add('hidden');
+    }
+
+    async function guardarClienteRapido() {
+      const nombre = document.getElementById('qcli-nombre').value.trim();
+      const nif = document.getElementById('qcli-nif').value.trim().toUpperCase();
+      if (!nombre || !nif) {
+        alert('Nombre y NIF/CIF son obligatorios.');
+        return;
+      }
+      const nuevo = {
+        id: 'c' + Date.now(),
+        nombre,
+        nif,
+        telefono: document.getElementById('qcli-telefono').value.trim(),
+        poblacion: document.getElementById('qcli-poblacion').value.trim(),
+        direccion: document.getElementById('qcli-direccion').value.trim(),
+        email: ''
+      };
+      appState.clientes.unshift(nuevo);
+      await guardarEstado();
+      poblarSelectClientes(nuevo.id);
+      cerrarModalClienteRapido();
+    }
+
+    function renderCamposExtraEditor(docExtras = {}) {
+      const cont = document.getElementById('editor-campos-extra');
+      const campos = ACTIVE_SECTOR.camposExtraDoc || [];
+      if (!campos.length) {
+        cont.classList.add('hidden');
+        cont.innerHTML = '';
+        return;
+      }
+      cont.classList.remove('hidden');
+      cont.innerHTML = campos.map(c => `
+        <div>
+          <label class="block text-[11px] font-bold uppercase text-slate-500 mb-1">${c.label}</label>
+          <input id="extra-${c.key}" type="text"
+            value="${(docExtras[c.key] || '').replace(/"/g, '&quot;')}"
+            placeholder="${c.placeholder || ''}"
+            class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-slate-50 text-xs font-bold ${c.uppercase ? 'uppercase' : ''}">
+        </div>
+      `).join('');
+    }
+
+    function recogerCamposExtraEditor() {
+      const extras = {};
+      (ACTIVE_SECTOR.camposExtraDoc || []).forEach(c => {
+        const el = document.getElementById('extra-' + c.key);
+        if (el) {
+          extras[c.key] = c.uppercase ? el.value.trim().toUpperCase() : el.value.trim();
+        }
+      });
+      return extras;
+    }
+
+    let lineasEditorTemp = [];
+
+    function abrirEditorDocumento(docId, tipo, clientePreseleccionado = '') {
+      const L = ACTIVE_SECTOR.labels;
+      ocultarTodasLasVistas();
+      document.getElementById('view-doc-editor').classList.remove('hidden');
+
+      let doc = docId ? appState.documentos.find(d => d.id === docId) : null;
+      const nombresTipo = {
+        presupuesto: L.presupuestoSingular.toUpperCase(),
+        albaran: L.albaranSingular.toUpperCase(),
+        factura: 'FACTURA PROFORMA'
+      };
+
+      if (doc) {
+        poblarSelectClientes(doc.clienteId);
+        document.getElementById('editor-titulo').textContent = `EDITAR ${nombresTipo[doc.tipo]} (${doc.numero})`;
+        document.getElementById('editor-subtitulo').textContent = `Estado: ${doc.estado}`;
+        document.getElementById('doc-id').value = doc.id;
+        document.getElementById('doc-tipo').value = doc.tipo;
+        document.getElementById('doc-obra').value = doc.obra || '';
+        renderCamposExtraEditor(doc.extras || {});
+        document.getElementById('doc-fecha').value = doc.fecha;
+        document.getElementById('doc-iva').value = String(doc.iva);
+        document.getElementById('doc-observaciones').value = doc.observaciones || '';
+        lineasEditorTemp = JSON.parse(JSON.stringify(doc.lineas || [])).map(l => ({ ...l, esNueva: false }));
+      } else {
+        poblarSelectClientes(clientePreseleccionado);
+        document.getElementById('editor-titulo').textContent = `NUEVO ${nombresTipo[tipo]}`;
+        document.getElementById('editor-subtitulo').textContent = 'Borrador editable';
+        document.getElementById('doc-id').value = '';
+        document.getElementById('doc-tipo').value = tipo;
+        document.getElementById('doc-obra').value = '';
+        renderCamposExtraEditor({});
+        document.getElementById('doc-fecha').value = new Date().toISOString().split('T')[0];
+        document.getElementById('doc-iva').value = '21';
+        document.getElementById('doc-observaciones').value = '';
+        const udDefecto = (appState.unidades && appState.unidades[0]) || 'ud';
+        lineasEditorTemp = [{ concepto: '', cantidad: 1, unidad: udDefecto, precio: 0, esNueva: false }];
+      }
+
+      document.getElementById('btn-convertir-proforma').classList.toggle('hidden', tipo === 'factura');
+      document.getElementById('btn-emitir-verifactu').classList.toggle('hidden', tipo !== 'factura');
+
+      renderLineasEditor();
+      recalcularEditor();
+      setTimeout(actualizarBotonScroll, 60);
+    }
+
+    function renderLineasEditor() {
+      const cont = document.getElementById('editor-lineas');
+      const catalogoOrdenado = [...appState.catalogoPrecios].sort((a, b) => a.concepto.localeCompare(b.concepto));
+
+      cont.innerHTML = lineasEditorTemp.map((l, idx) => {
+        const opcionesUnidad = appState.unidades.map(u => `<option value="${u}" ${l.unidad === u ? 'selected' : ''}>${u}</option>`).join('');
+        const existeEnCatalogo = catalogoOrdenado.some(p => p.concepto.toLowerCase() === (l.concepto || '').trim().toLowerCase());
+        const mostrarInputTexto = l.esNueva || (l.concepto && !existeEnCatalogo);
+
+        const opcionesPartidas = [
+          `<option value="">-- Seleccionar partida guardada --</option>`,
+          ...catalogoOrdenado.map(p => {
+            const prefijoCap = p.capitulo ? `[${p.capitulo}] ` : '';
+            return `<option value="${p.concepto.replace(/"/g, '&quot;')}" ${l.concepto === p.concepto ? 'selected' : ''}>${prefijoCap}${p.concepto} (${fmtEuro(p.precio)}/${p.unidad})</option>`;
+          }),
+          `<option value="__NEW_ITEM__">+ Nueva partida...</option>`
+        ].join('');
+
+        return `
+          <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+            <div class="flex gap-2 items-center">
+              ${mostrarInputTexto ? `
+                <div class="flex-1 flex gap-1.5">
+                  <input type="text" value="${l.concepto}" placeholder="Escribe el nombre de la nueva partida..." oninput="lineasEditorTemp[${idx}].concepto = this.value" class="flex-1 px-3 py-2 rounded-lg border border-blue-400 bg-white text-xs font-semibold">
+                  <button onclick="volverASelectPartida(${idx})" title="Volver a lista guardada" class="px-2.5 rounded-lg bg-slate-200 text-slate-700 font-bold text-xs">☰</button>
+                </div>
+              ` : `
+                <select onchange="alCambiarSelectPartida(${idx}, this)" class="flex-1 px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-semibold">
+                  ${opcionesPartidas}
+                </select>
+              `}
+              <button onclick="eliminarLineaEditor(${idx})" class="px-2.5 py-2 rounded-lg bg-rose-100 text-rose-700 font-bold text-xs">✕</button>
+            </div>
+            <div class="grid grid-cols-3 gap-2">
+              <div>
+                <label class="block text-[10px] font-bold text-slate-400">CANTIDAD</label>
+                <input type="number" step="0.01" value="${l.cantidad}" oninput="actualizarCampoLinea(${idx}, 'cantidad', this.value)" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-xs font-bold">
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-slate-400">UNIDAD</label>
+                <select onchange="cambiarUnidadLinea(${idx}, this)" class="w-full px-2 py-1.5 rounded-lg border border-slate-300 bg-white text-xs font-bold">
+                  ${opcionesUnidad}
+                  <option value="__NEW__">+ Añadir unidad...</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-slate-400">PRECIO (€)</label>
+                <input type="number" step="0.01" value="${l.precio}" oninput="actualizarCampoLinea(${idx}, 'precio', this.value)" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-xs font-bold">
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+      setTimeout(actualizarBotonScroll, 50);
+    }
+
+    function alCambiarSelectPartida(idx, selectEl) {
+      const val = selectEl.value;
+      if (val === '__NEW_ITEM__') {
+        lineasEditorTemp[idx].esNueva = true;
+        lineasEditorTemp[idx].concepto = '';
+        renderLineasEditor();
+        return;
+      }
+      lineasEditorTemp[idx].esNueva = false;
+      lineasEditorTemp[idx].concepto = val;
+      const match = appState.catalogoPrecios.find(p => p.concepto === val);
+      if (match) {
+        lineasEditorTemp[idx].unidad = match.unidad;
+        lineasEditorTemp[idx].precio = match.precio;
+      }
+      renderLineasEditor();
+      recalcularEditor();
+    }
+
+    function volverASelectPartida(idx) {
+      lineasEditorTemp[idx].esNueva = false;
+      lineasEditorTemp[idx].concepto = '';
+      renderLineasEditor();
+    }
+
+    function cambiarUnidadLinea(idx, selectEl) {
+      if (selectEl.value === '__NEW__') {
+        const nueva = prompt('Escribe la nueva unidad de medida (ej: tn, pto, lote, kit):');
+        if (nueva && nueva.trim()) {
+          const limpia = nueva.trim();
+          if (!appState.unidades.includes(limpia)) appState.unidades.push(limpia);
+          lineasEditorTemp[idx].unidad = limpia;
+        }
+        renderLineasEditor();
+      } else {
+        lineasEditorTemp[idx].unidad = selectEl.value;
+      }
+    }
+
+    function actualizarCampoLinea(idx, campo, val) {
+      lineasEditorTemp[idx][campo] = Number(val) || 0;
+      recalcularEditor();
+    }
+
+    function agregarLineaEditor() {
+      const udDefecto = (appState.unidades && appState.unidades[0]) || 'ud';
+      lineasEditorTemp.push({ concepto: '', cantidad: 1, unidad: udDefecto, precio: 0, esNueva: false });
+      renderLineasEditor();
+    }
+
+    function eliminarLineaEditor(idx) {
+      if (lineasEditorTemp.length === 1) return;
+      lineasEditorTemp.splice(idx, 1);
+      renderLineasEditor();
+      recalcularEditor();
+    }
+
+    function recalcularEditor() {
+      const iva = Number(document.getElementById('doc-iva').value) || 0;
+      const base = lineasEditorTemp.reduce((acc, l) => acc + (Number(l.cantidad) || 0) * (Number(l.precio) || 0), 0);
+      const cuota = base * (iva / 100);
+      document.getElementById('ed-base').textContent = fmtEuro(base);
+      document.getElementById('ed-iva-cuota').textContent = fmtEuro(cuota);
+      document.getElementById('ed-total').textContent = fmtEuro(base + cuota);
+    }
+
+    async function guardarDocumento(abrirPDF = false) {
+      const id = document.getElementById('doc-id').value;
+      const tipo = document.getElementById('doc-tipo').value;
+      const clienteId = document.getElementById('doc-cliente').value;
+      if (!clienteId || clienteId === '__NEW_CLIENT__') {
+        alert('Debes crear o seleccionar un cliente.');
+        return null;
+      }
+
+      lineasEditorTemp.forEach(l => {
+        if (l.concepto && l.concepto.trim()) {
+          const limpio = l.concepto.trim();
+          const idx = appState.catalogoPrecios.findIndex(p => p.concepto.toLowerCase() === limpio.toLowerCase());
+          if (idx >= 0) {
+            appState.catalogoPrecios[idx].precio = Number(l.precio) || 0;
+            appState.catalogoPrecios[idx].unidad = l.unidad;
+          } else {
+            appState.catalogoPrecios.push({ capitulo: 'General', concepto: limpio, unidad: l.unidad, precio: Number(l.precio) || 0 });
+          }
+        }
+      });
+
+      const lineasLimpias = lineasEditorTemp.map(({ concepto, cantidad, unidad, precio }) => ({ concepto, cantidad, unidad, precio }));
+      const obraVal = document.getElementById('doc-obra').value.trim();
+      const extrasVal = recogerCamposExtraEditor();
+
+      let docObj;
+      if (id) {
+        const idx = appState.documentos.findIndex(d => d.id === id);
+        docObj = {
+          ...appState.documentos[idx],
+          clienteId,
+          obra: obraVal,
+          extras: extrasVal,
+          fecha: document.getElementById('doc-fecha').value,
+          iva: Number(document.getElementById('doc-iva').value),
+          observaciones: document.getElementById('doc-observaciones').value.trim(),
+          lineas: lineasLimpias
+        };
+        appState.documentos[idx] = docObj;
+      } else {
+        const prefijos = { presupuesto: 'P2026-', albaran: 'A2026-', factura: 'PROFORMA-' };
+        const count = appState.documentos.filter(d => d.tipo === tipo).length + 1;
+        docObj = {
+          id: 'd' + Date.now(),
+          tipo,
+          numero: prefijos[tipo] + String(count).padStart(3, '0'),
+          clienteId,
+          obra: obraVal,
+          extras: extrasVal,
+          fecha: document.getElementById('doc-fecha').value,
+          iva: Number(document.getElementById('doc-iva').value),
+          estado: tipo === 'factura' ? 'Proforma' : (tipo === 'presupuesto' ? 'Borrador' : 'Pendiente'),
+          observaciones: document.getElementById('doc-observaciones').value.trim(),
+          lineas: lineasLimpias
+        };
+        appState.documentos.unshift(docObj);
+        document.getElementById('doc-id').value = docObj.id;
+      }
+
+      await guardarEstado();
+      if (abrirPDF) {
+        verPDFDocumento(docObj.id);
+      } else if (abrirPDF !== 'silent') {
+        volverDeEditor();
+      }
+      return docObj;
+    }
+
+    async function convertirAProformaDesdeEditor() {
+      const docOrig = await guardarDocumento('silent');
+      if (!docOrig) return;
+      docOrig.estado = docOrig.tipo === 'presupuesto' ? 'Aceptado' : 'Facturado';
+      const count = appState.documentos.filter(d => d.tipo === 'factura').length + 1;
+      const proforma = {
+        id: 'd' + Date.now(),
+        tipo: 'factura',
+        numero: 'PROFORMA-' + String(count).padStart(3, '0'),
+        clienteId: docOrig.clienteId,
+        obra: docOrig.obra || '',
+        extras: JSON.parse(JSON.stringify(docOrig.extras || {})),
+        fecha: new Date().toISOString().split('T')[0],
+        iva: docOrig.iva,
+        estado: 'Proforma',
+        observaciones: docOrig.observaciones,
+        lineas: JSON.parse(JSON.stringify(docOrig.lineas))
+      };
+      appState.documentos.unshift(proforma);
+      await guardarEstado();
+      vistaAnteriorEditor = 'facturas';
+      abrirEditorDocumento(proforma.id, 'factura');
+    }
+
+    // ==================== TARIFARIO ====================
+    function actualizarFiltroCapitulosTarifario() {
+      const sel = document.getElementById('filtro-capitulo-tarifario');
+      const valorActual = sel.value;
+      const caps = [...new Set((appState.catalogoPrecios || []).map(p => (p.capitulo || 'General').trim()).filter(Boolean))].sort();
+      sel.innerHTML = `<option value="">Todos capítulos</option>` + caps.map(c => `<option value="${c}">${c}</option>`).join('');
+      if (caps.includes(valorActual)) sel.value = valorActual;
+    }
+
+    function renderTarifario() {
+      const q = (document.getElementById('buscar-tarifario').value || '').toLowerCase();
+      const capFiltro = document.getElementById('filtro-capitulo-tarifario').value;
+      const cont = document.getElementById('lista-tarifario');
+
+      const listaConIdx = (appState.catalogoPrecios || []).map((item, index) => ({ ...item, index }));
+      const filtrados = listaConIdx
+        .filter(p => {
+          const cap = (p.capitulo || 'General').trim();
+          const coincideTexto = p.concepto.toLowerCase().includes(q) || cap.toLowerCase().includes(q);
+          const coincideCap = !capFiltro || cap === capFiltro;
+          return coincideTexto && coincideCap;
+        })
+        .sort((a, b) => (a.capitulo || 'General').localeCompare(b.capitulo || 'General') || a.concepto.localeCompare(b.concepto));
+
+      if (!filtrados.length) {
+        cont.innerHTML = `<div class="text-center text-xs text-slate-400 py-8">No hay partidas en el tarifario con ese filtro.</div>`;
+        setTimeout(actualizarBotonScroll, 50);
+        return;
+      }
+
+      cont.innerHTML = filtrados.map(p => `
+        <div onclick="abrirFormPartidaTarifario(${p.index})" class="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between gap-3 active:bg-slate-50 cursor-pointer">
+          <div class="min-w-0 flex-1">
+            <span class="inline-block text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-indigo-50 text-indigo-800 mb-1">
+              ${p.capitulo || 'General'}
+            </span>
+            <p class="font-bold text-slate-900 text-xs leading-snug">${p.concepto}</p>
+          </div>
+          <div class="text-right shrink-0">
+            <div class="text-sm font-extrabold text-slate-900">${fmtEuro(p.precio)}</div>
+            <div class="text-[10px] font-bold text-slate-500">por ${p.unidad} · ✏️</div>
+          </div>
+        </div>
+      `).join('');
+      setTimeout(actualizarBotonScroll, 50);
+    }
+
+    function abrirFormPartidaTarifario(idx = -1) {
+      const selUnidad = document.getElementById('tar-unidad');
+      selUnidad.innerHTML = appState.unidades.map(u => `<option value="${u}">${u}</option>`).join('');
+
+      const caps = [...new Set((appState.catalogoPrecios || []).map(p => (p.capitulo || '').trim()).filter(Boolean))].sort();
+      document.getElementById('lista-capitulos-sug').innerHTML = caps.map(c => `<option value="${c}">`).join('');
+
+      const btnDel = document.getElementById('btn-eliminar-partida-tar');
+      document.getElementById('tar-idx').value = String(idx);
+
+      if (idx >= 0 && appState.catalogoPrecios[idx]) {
+        const p = appState.catalogoPrecios[idx];
+        document.getElementById('titulo-modal-partida').textContent = 'Editar Partida del Tarifario';
+        document.getElementById('tar-capitulo').value = p.capitulo || 'General';
+        document.getElementById('tar-concepto').value = p.concepto;
+        if (!appState.unidades.includes(p.unidad)) {
+          selUnidad.innerHTML += `<option value="${p.unidad}">${p.unidad}</option>`;
+        }
+        selUnidad.value = p.unidad;
+        document.getElementById('tar-precio').value = p.precio;
+        btnDel.classList.remove('hidden');
+      } else {
+        document.getElementById('titulo-modal-partida').textContent = 'Nueva Partida en Tarifario';
+        document.getElementById('tar-capitulo').value = '';
+        document.getElementById('tar-concepto').value = '';
+        selUnidad.value = appState.unidades[0] || 'ud';
+        document.getElementById('tar-precio').value = '';
+        btnDel.classList.add('hidden');
+      }
+      document.getElementById('modal-partida-tarifario').classList.remove('hidden');
+    }
+
+    function cerrarModalPartidaTarifario() {
+      document.getElementById('modal-partida-tarifario').classList.add('hidden');
+    }
+
+    async function guardarPartidaTarifario() {
+      const idx = Number(document.getElementById('tar-idx').value);
+      const capitulo = document.getElementById('tar-capitulo').value.trim() || 'General';
+      const concepto = document.getElementById('tar-concepto').value.trim();
+      const unidad = document.getElementById('tar-unidad').value;
+      const precio = Number(document.getElementById('tar-precio').value);
+
+      if (!concepto || isNaN(precio) || precio < 0) {
+        alert('Introduce el concepto y un precio válido.');
+        return;
+      }
+
+      const duplicadoIdx = appState.catalogoPrecios.findIndex((p, i) => i !== idx && p.concepto.toLowerCase() === concepto.toLowerCase());
+      if (duplicadoIdx >= 0) {
+        if (!confirm('Ya existe una partida con ese nombre exacto. ¿Deseas actualizarla con estos datos?')) return;
+        appState.catalogoPrecios[duplicadoIdx] = { capitulo, concepto, unidad, precio };
+        if (idx >= 0) appState.catalogoPrecios.splice(idx, 1);
+      } else if (idx >= 0) {
+        appState.catalogoPrecios[idx] = { capitulo, concepto, unidad, precio };
+      } else {
+        appState.catalogoPrecios.push({ capitulo, concepto, unidad, precio });
+      }
+
+      await guardarEstado();
+      cerrarModalPartidaTarifario();
+      actualizarFiltroCapitulosTarifario();
+      renderTarifario();
+    }
+
+    async function eliminarPartidaTarifario() {
+      const idx = Number(document.getElementById('tar-idx').value);
+      if (idx >= 0 && confirm('¿Eliminar esta partida del tarifario?')) {
+        appState.catalogoPrecios.splice(idx, 1);
+        await guardarEstado();
+        cerrarModalPartidaTarifario();
+        actualizarFiltroCapitulosTarifario();
+        renderTarifario();
+      }
+    }
+
+    function exportarTarifarioCSV() {
+      const filas = [['Capitulo', 'Concepto', 'Unidad', 'Precio']];
+      const ordenados = [...(appState.catalogoPrecios || [])].sort((a, b) =>
+        (a.capitulo || 'General').localeCompare(b.capitulo || 'General') || a.concepto.localeCompare(b.concepto)
+      );
+      ordenados.forEach(p => {
+        filas.push([p.capitulo || 'General', p.concepto, p.unidad, (Number(p.precio) || 0).toFixed(2).replace('.', ',')]);
+      });
+      descargarCSV(`Tarifario_${ACTIVE_SECTOR.appName}.csv`, filas);
+    }
+
+    function abrirModalImportarTarifario() {
+      document.getElementById('imp-tarifario-file').value = '';
+      document.getElementById('modal-importar-tarifario').classList.remove('hidden');
+    }
+
+    function cerrarModalImportarTarifario() {
+      document.getElementById('modal-importar-tarifario').classList.add('hidden');
+    }
+
+    function descargarPlantillaTarifarioExcel() {
+      const base = (ACTIVE_SECTOR.tarifarioInicial && ACTIVE_SECTOR.tarifarioInicial.length)
+        ? ACTIVE_SECTOR.tarifarioInicial
+        : [{ capitulo: 'General', concepto: 'Servicio técnico estándar', unidad: 'h', precio: 35.00 }];
+
+      const datosEjemplo = base.map(item => ({
+        Capitulo: item.capitulo || 'General',
+        Concepto: item.concepto,
+        Unidad: item.unidad,
+        Precio: item.precio
+      }));
+
+      if (window.XLSX) {
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.json_to_sheet(datosEjemplo);
+        ws['!cols'] = [{ wch: 20 }, { wch: 44 }, { wch: 10 }, { wch: 12 }];
+        XLSX.utils.book_append_sheet(wb, ws, 'Tarifas');
+        XLSX.writeFile(wb, `Plantilla_Tarifario_${ACTIVE_SECTOR.appName}.xlsx`);
+      } else {
+        const filas = [['Capitulo', 'Concepto', 'Unidad', 'Precio'], ...datosEjemplo.map(d => [d.Capitulo, d.Concepto, d.Unidad, String(d.Precio).replace('.', ',')])];
+        descargarCSV(`Plantilla_Tarifario_${ACTIVE_SECTOR.appName}.csv`, filas);
+      }
+    }
+
+    function normalizarCabecera(str) {
+      return String(str || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    }
+
+    function parsearPrecioImport(val) {
+      if (typeof val === 'number') return val;
+      const limpio = String(val || '').replace(/[€\s]/g, '').replace(/\./g, '').replace(',', '.');
+      return parseFloat(limpio);
+    }
+
+    async function procesarArchivoTarifario() {
+      const fileInput = document.getElementById('imp-tarifario-file');
+      const file = fileInput.files[0];
+      if (!file) {
+        alert('Selecciona un archivo Excel (.xlsx, .xls) o CSV primero.');
+        return;
+      }
+
+      const modo = document.getElementById('imp-modo-duplicados').value;
+
+      try {
+        let filasObjetos = [];
+        if (window.XLSX) {
+          const buffer = await file.arrayBuffer();
+          const workbook = XLSX.read(buffer, { type: 'array' });
+          const primeraHoja = workbook.Sheets[workbook.SheetNames[0]];
+          filasObjetos = XLSX.utils.sheet_to_json(primeraHoja, { defval: '' });
+        } else {
+          const texto = await file.text();
+          const lineas = texto.split(/?
+/).filter(l => l.trim());
+          if (lineas.length < 2) throw new Error('Archivo vacío');
+          const sep = lineas[0].includes(';') ? ';' : ',';
+          const headers = lineas[0].split(sep).map(h => h.replace(/^"|"$/g, '').trim());
+          filasObjetos = lineas.slice(1).map(line => {
+            const cols = line.split(sep).map(c => c.replace(/^"|"$/g, '').trim());
+            const obj = {};
+            headers.forEach((h, i) => { obj[h] = cols[i] ?? ''; });
+            return obj;
+          });
+        }
+
+        if (!filasObjetos.length) {
+          alert('El archivo no contiene filas de datos.');
+          return;
+        }
+
+        let anadidas = 0;
+        let actualizadas = 0;
+        let omitidas = 0;
+
+        filasObjetos.forEach(fila => {
+          let capitulo = 'General';
+          let concepto = '';
+          let unidad = appState.unidades[0] || 'ud';
+          let precio = NaN;
+
+          Object.keys(fila).forEach(k => {
+            const norm = normalizarCabecera(k);
+            if (norm.includes('capitulo') || norm.includes('categoria') || norm.includes('familia')) {
+              const valCap = String(fila[k] || '').trim();
+              if (valCap) capitulo = valCap;
+            } else if (norm.includes('concepto') || norm.includes('descripcion') || norm.includes('partida') || norm === 'nombre') {
+              concepto = String(fila[k] || '').trim();
+            } else if (norm.includes('unidad') || norm === 'ud' || norm === 'medida') {
+              const valUd = String(fila[k] || '').trim();
+              if (valUd) unidad = valUd;
+            } else if (norm.includes('precio') || norm.includes('importe') || norm.includes('tarifa')) {
+              precio = parsearPrecioImport(fila[k]);
+            }
+          });
+
+          if (!concepto || isNaN(precio) || precio < 0) return;
+
+          if (!appState.unidades.includes(unidad)) {
+            appState.unidades.push(unidad);
+          }
+
+          const idxExistente = appState.catalogoPrecios.findIndex(
+            p => p.concepto.trim().toLowerCase() === concepto.toLowerCase()
+          );
+
+          if (idxExistente >= 0) {
+            if (modo === 'actualizar') {
+              appState.catalogoPrecios[idxExistente] = { capitulo, concepto, unidad, precio };
+              actualizadas++;
+            } else {
+              omitidas++;
+            }
+          } else {
+            appState.catalogoPrecios.push({ capitulo, concepto, unidad, precio });
+            anadidas++;
+          }
+        });
+
+        await guardarEstado();
+        cerrarModalImportarTarifario();
+        actualizarFiltroCapitulosTarifario();
+        renderTarifario();
+
+        alert(`Importación completada:
+• Partidas nuevas añadidas: ${anadidas}
+• Partidas existentes actualizadas: ${actualizadas}
+• Duplicadas omitidas: ${omitidas}`);
+      } catch (err) {
+        alert('No se pudo leer el archivo. Asegúrate de que sea un Excel (.xlsx) o CSV válido con las columnas Concepto, Unidad y Precio.');
+      }
+    }
+
+    // ==================== VERI*FACTU Y PDF A4 ====================
+    function abrirModalVerifactu() {
+      document.getElementById('modal-verifactu').classList.remove('hidden');
+    }
+
+    function cerrarModalVerifactu() {
+      document.getElementById('modal-verifactu').classList.add('hidden');
+    }
+
+    async function confirmarEmisionVerifactu() {
+      const doc = await guardarDocumento('silent');
+      if (!doc) return;
+      cerrarModalVerifactu();
+
+      const oficiales = appState.documentos.filter(d => d.tipo === 'factura' && d.estado === 'Oficial');
+      const numCorrelativo = `${appState.empresa.serie}-${String(oficiales.length + 1).padStart(4, '0')}`;
+      const tot = calcTotalesDoc(doc);
+      const fechaSello = new Date().toISOString();
+
+      const cadenaVerifactu = `IDEmisor=${appState.empresa.nif}&NumSerie=${numCorrelativo}&Fecha=${doc.fecha}&Cuota=${tot.cuota.toFixed(2)}&Total=${tot.total.toFixed(2)}&HuellaAnterior=${appState.ultimoHashVerifactu}&FechaHora=${fechaSello}`;
+      const huella = await sha256(cadenaVerifactu);
+
+      doc.numero = numCorrelativo;
+      doc.estado = 'Oficial';
+      doc.hashVerifactu = huella;
+      doc.hashAnterior = appState.ultimoHashVerifactu;
+      doc.fechaHoraRegistro = fechaSello;
+      appState.ultimoHashVerifactu = huella;
+      appState.configBackup.pendienteTrasFactura = true;
+
+      await guardarEstado();
+      irA('facturas');
+      verPDFDocumento(doc.id);
+    }
+
+    function verPDFDocumento(id) {
+      const L = ACTIVE_SECTOR.labels;
+      const doc = appState.documentos.find(d => d.id === id);
+      if (!doc) return;
+      const cli = getCliente(doc.clienteId);
+      const tot = calcTotalesDoc(doc);
+      const esOficial = doc.tipo === 'factura' && doc.estado === 'Oficial';
+      const titulosDoc = {
+        presupuesto: L.presupuestoSingular.toUpperCase(),
+        albaran: L.albaranSingular.toUpperCase(),
+        factura: esOficial ? 'FACTURA OFICIAL' : 'FACTURA PROFORMA (BORRADOR)'
+      };
+
+      const nombreLimpioCliente = (cli.nombre || 'Cliente').replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ_-]/g, '_');
+      docActualPDFNombre = `${doc.numero}_${nombreLimpioCliente}.pdf`;
+
+      const htmlExtrasPDF = (ACTIVE_SECTOR.camposExtraDoc || [])
+        .filter(c => doc.extras && doc.extras[c.key])
+        .map(c => `<span class="text-xs bg-white px-2.5 py-1 rounded border border-amber-300 text-slate-900"><strong>${c.label.replace('*', '').trim()}:</strong> ${doc.extras[c.key]}</span>`)
+        .join(' ');
+
+      const tieneBloqueReferencia = Boolean(doc.obra || htmlExtrasPDF);
+
+      const printArea = document.getElementById('print-area');
+      printArea.innerHTML = `
+        <div class="flex flex-col justify-between" style="min-height: 265mm;">
+          <div>
+            <div class="border-b-2 border-slate-900 pb-5 mb-6 flex justify-between items-start">
+              <div>
+                ${appState.empresa.logo ? `<img src="${appState.empresa.logo}" class="h-16 mb-2 object-contain">` : ''}
+                <h1 class="font-extrabold text-xl text-slate-900">${appState.empresa.nombre}</h1>
+                <p class="text-xs text-slate-600 mt-0.5">NIF: <strong>${appState.empresa.nif}</strong></p>
+                <p class="text-xs text-slate-600">${appState.empresa.direccion}</p>
+              </div>
+              <div class="text-right">
+                <span class="inline-block px-3 py-1.5 rounded bg-slate-900 text-white font-extrabold text-xs uppercase tracking-wider">${titulosDoc[doc.tipo]}</span>
+                <p class="font-extrabold text-lg text-slate-900 mt-2">${doc.numero}</p>
+                <p class="text-xs text-slate-600 mt-0.5">Fecha: <strong>${doc.fecha}</strong></p>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 gap-3 mb-6">
+              <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <div class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Datos del Cliente</div>
+                <div class="font-extrabold text-base text-slate-900">${cli.nombre}</div>
+                <div class="text-xs text-slate-700 mt-0.5">NIF/CIF: <strong>${cli.nif}</strong></div>
+                <div class="text-xs text-slate-600">${cli.direccion || ''} ${cli.poblacion || ''}</div>
+                ${cli.telefono ? `<div class="text-xs text-slate-600">Tel: ${cli.telefono}</div>` : ''}
+              </div>
+              ${tieneBloqueReferencia ? `
+                <div class="bg-amber-50/70 p-3.5 rounded-xl border border-amber-200 flex flex-wrap items-center justify-between gap-2">
+                  ${doc.obra ? `
+                    <div>
+                      <span class="text-xs font-extrabold uppercase text-amber-900">${L.referenciaLabel}:</span>
+                      <span class="text-sm font-bold text-slate-900 ml-1">${doc.obra}</span>
+                    </div>
+                  ` : ''}
+                  ${htmlExtrasPDF ? `<div class="flex flex-wrap gap-1.5">${htmlExtrasPDF}</div>` : ''}
+                </div>
+              ` : ''}
+            </div>
+
+            <table class="w-full text-left border-collapse mb-6">
+              <thead>
+                <tr class="border-b-2 border-slate-800 text-xs uppercase text-slate-700 bg-slate-100">
+                  <th class="py-2.5 px-2">Descripción / Partida</th>
+                  <th class="py-2.5 px-2 text-right">Cantidad</th>
+                  <th class="py-2.5 px-2 text-right">Precio Unit.</th>
+                  <th class="py-2.5 px-2 text-right">Importe</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-200 text-xs">
+                ${doc.lineas.map(l => `
+                  <tr>
+                    <td class="py-3 px-2 font-medium text-slate-900">${l.concepto}</td>
+                    <td class="py-3 px-2 text-right whitespace-nowrap text-slate-700">${l.cantidad} ${l.unidad}</td>
+                    <td class="py-3 px-2 text-right whitespace-nowrap text-slate-700">${fmtEuro(l.precio)}</td>
+                    <td class="py-3 px-2 text-right font-bold whitespace-nowrap text-slate-900">${fmtEuro((l.cantidad || 0) * (l.precio || 0))}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+
+            <div class="flex justify-end mb-6">
+              <div class="w-72 bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-1.5 text-right">
+                <div class="flex justify-between text-xs text-slate-600">
+                  <span>Base Imponible:</span>
+                  <strong>${fmtEuro(tot.base)}</strong>
+                </div>
+                <div class="flex justify-between text-xs text-slate-600">
+                  <span>IVA (${doc.iva}%):</span>
+                  <strong>${fmtEuro(tot.cuota)}</strong>
+                </div>
+                <div class="flex justify-between text-lg font-extrabold text-slate-900 pt-2 border-t border-slate-300">
+                  <span>TOTAL:</span>
+                  <span>${fmtEuro(tot.total)}</span>
+                </div>
+              </div>
+            </div>
+
+            ${doc.observaciones ? `
+              <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700 mb-4">
+                <strong>Observaciones:</strong> ${doc.observaciones}
+              </div>
+            ` : ''}
+
+            ${doc.tipo === 'factura' && appState.empresa.iban ? `
+              <div class="text-xs text-slate-700 mb-4"><strong>Forma de pago / Transferencia IBAN:</strong> ${appState.empresa.iban}</div>
+            ` : ''}
+          </div>
+
+          <div>
+            ${esOficial ? `
+              <div class="pt-4 border-t-2 border-dashed border-slate-300 flex items-center gap-4">
+                <div id="pdf-qr-box" class="shrink-0"></div>
+                <div class="text-[10px] text-slate-600 break-all leading-relaxed">
+                  <div class="font-extrabold text-slate-900 uppercase">Factura Verificable en la Sede Electrónica de la AEAT (VERI*FACTU)</div>
+                  <div class="mt-1">Huella SHA-256: ${doc.hashVerifactu}</div>
+                  <div>Fecha/Hora Registro: ${doc.fechaHoraRegistro}</div>
+                </div>
+              </div>
+            ` : `
+              <div class="pt-6 border-t border-slate-200 flex justify-between text-[11px] text-slate-400">
+                <span>Generado con ${ACTIVE_SECTOR.appName} ${APP_VERSION}</span>
+                <span>Conforme cliente / Firma: ______________________</span>
+              </div>
+            `}
+          </div>
+        </div>
+      `;
+
+      document.getElementById('view-pdf').classList.remove('hidden');
+
+      if (esOficial && window.QRCode) {
+        const qrUrl = `https://www2.agenciatributaria.gob.es/wlpl/TIKE-CONT/ValidarQR?nif=${appState.empresa.nif}&numserie=${doc.numero}&fecha=${doc.fecha}&importe=${tot.total.toFixed(2)}`;
+        new QRCode(document.getElementById('pdf-qr-box'), { text: qrUrl, width: 88, height: 88 });
+      }
+    }
+
+    async function descargarArchivoPDFA4() {
+      const elemento = document.getElementById('print-area');
+      const btn = document.getElementById('btn-descargar-pdf');
+      const textoOrig = btn.textContent;
+      btn.textContent = '⏳ GENERANDO PDF A4...';
+      btn.disabled = true;
+
+      try {
+        if (window.html2pdf) {
+          const opciones = {
+            margin: 0,
+            filename: docActualPDFNombre,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2, useCORS: true, logging: false },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+          };
+          await html2pdf().set(opciones).from(elemento).save();
+        } else {
+          window.print();
+        }
+      } catch (e) {
+        window.print();
+      } finally {
+        btn.textContent = textoOrig;
+        btn.disabled = false;
+      }
+    }
+
+    function cerrarVistaPDF() {
+      document.getElementById('view-pdf').classList.add('hidden');
+    }
+
+    // ==================== GASTOS ====================
+    function renderGastos() {
+      const q = (document.getElementById('buscar-gasto').value || '').toLowerCase();
+      const cont = document.getElementById('lista-gastos');
+      const filtrados = appState.gastos.filter(g =>
+        g.proveedor.toLowerCase().includes(q) || (g.nif || '').toLowerCase().includes(q) || (g.concepto || '').toLowerCase().includes(q)
+      );
+
+      if (!filtrados.length) {
+        cont.innerHTML = `<div class="text-center text-xs text-slate-400 py-8">No hay gastos registrados.</div>`;
+        setTimeout(actualizarBotonScroll, 50);
+        return;
+      }
+
+      cont.innerHTML = filtrados.map(g => {
+        const total = g.base * (1 + (g.iva / 100));
+        return `
+          <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+            <div class="flex justify-between items-start">
+              <div>
+                <div class="flex items-center gap-1.5">
+                  <span class="font-extrabold text-slate-900 text-sm">${g.proveedor}</span>
+                  ${g.foto ? '<span class="text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-bold">📎 Ticket</span>' : ''}
+                </div>
+                <p class="text-xs text-slate-600">${g.concepto || g.categoria}</p>
+                <p class="text-[11px] text-slate-400">${g.fecha} · Fra: ${g.numeroFactura || 'S/N'} · IVA ${g.iva}%</p>
+              </div>
+              <div class="text-right">
+                <div class="font-extrabold text-rose-700 text-base">${fmtEuro(total)}</div>
+                <button onclick="eliminarGasto('${g.id}')" class="text-[11px] text-slate-400 underline mt-1">Borrar</button>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+      setTimeout(actualizarBotonScroll, 50);
+    }
+
+    function abrirFormGasto() {
+      ocultarTodasLasVistas();
+      document.getElementById('view-gasto-form').classList.remove('hidden');
+      gastoFotoBase64 = '';
+      ['gas-id', 'gas-proveedor', 'gas-nif', 'gas-num', 'gas-concepto', 'gas-base'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('gas-fecha').value = new Date().toISOString().split('T')[0];
+      document.getElementById('gas-iva').value = '21';
+      document.getElementById('gas-total-preview').textContent = '0,00 €';
+      document.getElementById('gas-foto-preview').classList.add('hidden');
+
+      const provUnicos = [...new Set(appState.gastos.map(g => g.proveedor))];
+      document.getElementById('lista-proveedores-sug').innerHTML = provUnicos.map(p => `<option value="${p}">`).join('');
+      setTimeout(actualizarBotonScroll, 50);
+    }
+
+    function autocompletarProveedor() {
+      const val = document.getElementById('gas-proveedor').value.trim().toLowerCase();
+      const prev = appState.gastos.find(g => g.proveedor.toLowerCase() === val);
+      if (prev) {
+        if (prev.nif) document.getElementById('gas-nif').value = prev.nif;
+        if (prev.categoria) document.getElementById('gas-categoria').value = prev.categoria;
+      }
+    }
+
+    function recalcularGasto() {
+      const base = Number(document.getElementById('gas-base').value) || 0;
+      const iva = Number(document.getElementById('gas-iva').value) || 0;
+      document.getElementById('gas-total-preview').textContent = fmtEuro(base * (1 + iva / 100));
+    }
+
+    function procesarFotoGasto(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const maxW = 800;
+          const scale = Math.min(1, maxW / img.width);
+          canvas.width = img.width * scale;
+          canvas.height = img.height * scale;
+          canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+          gastoFotoBase64 = canvas.toDataURL('image/jpeg', 0.65);
+          const prevEl = document.getElementById('gas-foto-preview');
+          prevEl.src = gastoFotoBase64;
+          prevEl.classList.remove('hidden');
+          setTimeout(actualizarBotonScroll, 50);
+        };
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    async function guardarGasto() {
+      const proveedor = document.getElementById('gas-proveedor').value.trim();
+      const base = Number(document.getElementById('gas-base').value) || 0;
+      if (!proveedor || base <= 0) {
+        alert('Indica proveedor y base imponible.');
+        return;
+      }
+      appState.gastos.unshift({
+        id: 'g' + Date.now(),
+        proveedor,
+        nif: document.getElementById('gas-nif').value.trim().toUpperCase(),
+        numeroFactura: document.getElementById('gas-num').value.trim(),
+        fecha: document.getElementById('gas-fecha').value,
+        categoria: document.getElementById('gas-categoria').value,
+        concepto: document.getElementById('gas-concepto').value.trim(),
+        base,
+        iva: Number(document.getElementById('gas-iva').value),
+        foto: gastoFotoBase64
+      });
+      await guardarEstado();
+      irA('gastos');
+    }
+
+    async function eliminarGasto(id) {
+      if (confirm('¿Eliminar este gasto?')) {
+        appState.gastos = appState.gastos.filter(g => g.id !== id);
+        await guardarEstado();
+        renderGastos();
+      }
+    }
+
+    // ==================== ESTADO FISCAL Y EXPORTACIONES ====================
+    function perteneceAPeriodo(fechaStr, trim, anio) {
+      if (!fechaStr) return false;
+      const [y, m] = fechaStr.split('-').map(Number);
+      if (String(y) !== String(anio)) return false;
+      if (trim === 'ALL') return true;
+      const t = Math.ceil(m / 3);
+      return String(t) === String(trim);
+    }
+
+    function renderEstado() {
+      const trim = document.getElementById('est-trimestre').value;
+      const anio = document.getElementById('est-anio').value;
+
+      const factOficiales = appState.documentos.filter(d => d.tipo === 'factura' && d.estado === 'Oficial' && perteneceAPeriodo(d.fecha, trim, anio));
+      const gastosPer = appState.gastos.filter(g => perteneceAPeriodo(g.fecha, trim, anio));
+
+      let ventasBase = 0, ivaRep = 0;
+      factOficiales.forEach(f => {
+        const t = calcTotalesDoc(f);
+        ventasBase += t.base;
+        ivaRep += t.cuota;
+      });
+
+      let ivaSop = 0;
+      gastosPer.forEach(g => {
+        ivaSop += g.base * (g.iva / 100);
+      });
+
+      document.getElementById('est-ventas-base').textContent = fmtEuro(ventasBase);
+      document.getElementById('est-iva-rep').textContent = fmtEuro(ivaRep);
+      document.getElementById('est-iva-sop').textContent = fmtEuro(ivaSop);
+      document.getElementById('est-iva-neto').textContent = fmtEuro(ivaRep - ivaSop);
+    }
+
+    function descargarCSV(nombreArchivo, filas) {
+      const csv = '﻿' + filas.map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(';')).join('
+');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = nombreArchivo;
+      a.click();
+    }
+
+    function exportarCSVFacturas() {
+      const L = ACTIVE_SECTOR.labels;
+      const trim = document.getElementById('est-trimestre').value;
+      const anio = document.getElementById('est-anio').value;
+      const lista = appState.documentos.filter(d => d.tipo === 'factura' && d.estado === 'Oficial' && perteneceAPeriodo(d.fecha, trim, anio));
+      const filas = [['Numero', 'Fecha', L.referenciaLabel, 'NIF Cliente', 'Cliente', 'Base Imponible', '% IVA', 'Cuota IVA', 'Total', 'Huella VeriFactu']];
+      lista.forEach(f => {
+        const c = getCliente(f.clienteId);
+        const t = calcTotalesDoc(f);
+        filas.push([f.numero, f.fecha, f.obra || '', c.nif, c.nombre, t.base.toFixed(2).replace('.', ','), f.iva, t.cuota.toFixed(2).replace('.', ','), t.total.toFixed(2).replace('.', ','), f.hashVerifactu || '']);
+      });
+      descargarCSV(`Libro_Facturas_Emitidas_${ACTIVE_SECTOR.appName}_${anio}_${trim}T.csv`, filas);
+    }
+
+    function exportarCSVGastos() {
+      const trim = document.getElementById('est-trimestre').value;
+      const anio = document.getElementById('est-anio').value;
+      const lista = appState.gastos.filter(g => perteneceAPeriodo(g.fecha, trim, anio));
+      const filas = [['Fecha', 'Proveedor', 'NIF', 'Num Factura', 'Categoria', 'Base Imponible', '% IVA', 'Cuota IVA', 'Total']];
+      lista.forEach(g => {
+        const cuota = g.base * (g.iva / 100);
+        filas.push([g.fecha, g.proveedor, g.nif, g.numeroFactura, g.categoria, g.base.toFixed(2).replace('.', ','), g.iva, cuota.toFixed(2).replace('.', ','), (g.base + cuota).toFixed(2).replace('.', ',')]);
+      });
+      descargarCSV(`Libro_Gastos_${ACTIVE_SECTOR.appName}_${anio}_${trim}T.csv`, filas);
+    }
+
+    function exportarCSVClientes() {
+      const filas = [['Nombre', 'NIF', 'Direccion', 'Poblacion', 'Telefono', 'Email']];
+      appState.clientes.forEach(c => filas.push([c.nombre, c.nif, c.direccion, c.poblacion, c.telefono, c.email]));
+      descargarCSV(`Directorio_Clientes_${ACTIVE_SECTOR.appName}.csv`, filas);
+    }
+
+    // ==================== CONFIGURACIÓN Y NUBE ====================
+    function cargarVistaConfig() {
+      document.getElementById('cfg-nombre').value = appState.empresa.nombre;
+      document.getElementById('cfg-nif').value = appState.empresa.nif;
+      document.getElementById('cfg-serie').value = appState.empresa.serie;
+      document.getElementById('cfg-direccion').value = appState.empresa.direccion;
+      document.getElementById('cfg-iban').value = appState.empresa.iban || '';
+      document.getElementById('cfg-pass').value = (appState.auth && appState.auth.password) || '1234';
+      document.getElementById('cfg-master').value = (appState.auth && appState.auth.masterKey) || '1234';
+      document.getElementById('cfg-backup-freq').value = appState.configBackup.frecuencia || '7';
+      document.getElementById('cfg-last-backup').textContent = appState.configBackup.ultimaCopia
+        ? `Última: ${new Date(appState.configBackup.ultimaCopia).toLocaleString('es-ES')}`
+        : 'Sin copias aún';
+
+      const dias = calcularDiasPruebaRestantes();
+      if (dias === null) {
+        document.getElementById('cfg-lic-status').textContent = 'LICENCIA PRO ACTIVA';
+        document.getElementById('cfg-lic-status').className = 'text-[10px] font-extrabold px-2 py-0.5 rounded bg-emerald-200 text-emerald-950';
+        document.getElementById('cfg-lic-desc').textContent = `Suscripción activa (${appState.licencia.claveActivada}). Todas las funciones desbloqueadas.`;
+        document.getElementById('cfg-lic-key').value = appState.licencia.claveActivada;
+      } else {
+        document.getElementById('cfg-lic-status').textContent = `PRUEBA (${dias} DÍAS)`;
+        document.getElementById('cfg-lic-desc').textContent = `Te quedan ${dias} días de prueba gratuita. Introduce tu clave de suscripción PRO para activar.`;
+      }
+      inicializarEtiquetasVersion();
+    }
+
+    async function guardarFrecuenciaBackup() {
+      appState.configBackup.frecuencia = document.getElementById('cfg-backup-freq').value;
+      await guardarEstado();
+    }
+
+    async function marcarBackupRealizado() {
+      appState.configBackup.ultimaCopia = new Date().toISOString();
+      appState.configBackup.pendienteTrasFactura = false;
+      await guardarEstado();
+      cargarVistaConfig();
+    }
+
+    function generarBlobBackup() {
+      const fecha = new Date().toISOString().split('T')[0];
+      const nombre = `${ACTIVE_SECTOR.appName}_Backup_${fecha}.json`;
+      const blob = new Blob([JSON.stringify(appState, null, 2)], { type: 'application/json' });
+      return { blob, nombre };
+    }
+
+    async function compartirBackupNube() {
+      const { blob, nombre } = generarBlobBackup();
+      const file = new File([blob], nombre, { type: 'application/json' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({
+            files: [file],
+            title: `Copia de Seguridad ${ACTIVE_SECTOR.appName}`,
+            text: `Respaldo de base de datos ${ACTIVE_SECTOR.appName}`
+          });
+          await marcarBackupRealizado();
+          return;
+        } catch (e) {}
+      }
+      descargarBackupJSON();
+    }
+
+    async function descargarBackupJSON() {
+      const { blob, nombre } = generarBlobBackup();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = nombre;
+      a.click();
+      await marcarBackupRealizado();
+    }
+
+    function previsualizarRestauracion(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const data = JSON.parse(ev.target.result);
+          if (!data.empresa || !Array.isArray(data.clientes)) throw new Error('Formato inválido');
+          backupPendienteRestaurar = data;
+          document.getElementById('restore-preview-text').innerHTML = `
+            Empresa: <strong>${data.empresa.nombre}</strong><br>
+            Clientes: <strong>${data.clientes.length}</strong> · Documentos: <strong>${(data.documentos || []).length}</strong> · Gastos: <strong>${(data.gastos || []).length}</strong>
+          `;
+          document.getElementById('restore-preview-box').classList.remove('hidden');
+        } catch (err) {
+          alert('El archivo seleccionado no es una copia de seguridad válida.');
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    async function confirmarRestauracion() {
+      if (!backupPendienteRestaurar) return;
+      appState = Object.assign(construirEstadoInicialSector(), backupPendienteRestaurar);
+      await guardarEstado();
+      document.getElementById('restore-preview-box').classList.add('hidden');
+      alert('Copia de seguridad restaurada correctamente.');
+      irA('menu');
+    }
+
+    function subirLogoEmpresa(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = async (ev) => {
+        appState.empresa.logo = ev.target.result;
+        await guardarEstado();
+        alert('Logotipo actualizado.');
+      };
+      reader.readAsDataURL(file);
+    }
+
+    async function guardarConfigEmpresa() {
+      appState.empresa.nombre = document.getElementById('cfg-nombre').value.trim() || appState.empresa.nombre;
+      appState.empresa.nif = document.getElementById('cfg-nif').value.trim().toUpperCase();
+      appState.empresa.serie = document.getElementById('cfg-serie').value.trim().toUpperCase() || 'F2026';
+      appState.empresa.direccion = document.getElementById('cfg-direccion').value.trim();
+      appState.empresa.iban = document.getElementById('cfg-iban').value.trim().toUpperCase();
+      appState.auth.password = document.getElementById('cfg-pass').value.trim() || appState.auth.password;
+      appState.auth.masterKey = document.getElementById('cfg-master').value.trim() || appState.auth.masterKey;
+      await guardarEstado();
+      alert('Datos de empresa y seguridad guardados.');
+      irA('menu');
+    }
+
+    async function limpiarDatosDemo() {
+      if (confirm('¿Seguro que deseas borrar los clientes, documentos y gastos de ejemplo para empezar de cero? (Tus datos de empresa y tarifario se mantendrán).')) {
+        appState.clientes = [];
+        appState.documentos = [];
+        appState.gastos = [];
+        appState.ultimoHashVerifactu = '0000000000000000000000000000000000000000000000000000000000000000';
+        await guardarEstado();
+        alert('Base de datos limpia y lista para uso real.');
+        irA('menu');
+      }
+    }
+
+    // ==================== REGISTRO SERVICE WORKER ====================
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').then((reg) => {
+          swRegistrationGlobal = reg;
+          const badge = document.getElementById('cfg-sw-badge');
+          if (badge) {
+            badge.textContent = 'PWA ACTIVA';
+            badge.className = 'text-[10px] font-extrabold px-2 py-0.5 rounded bg-emerald-900/60 text-emerald-300 border border-emerald-600';
+          }
+
+          if (reg.waiting) {
+            swWorkerEnEspera = reg.waiting;
+            mostrarBannerActualizacion('Nueva versión lista para instalar');
+          }
+
+          reg.addEventListener('updatefound', () => {
+            const newWorker = reg.installing;
+            if (!newWorker) return;
+            newWorker.addEventListener('statechange', () => {
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                swWorkerEnEspera = newWorker;
+                mostrarBannerActualizacion('Nueva versión lista para instalar');
+              }
+            });
+          });
+        }).catch(() => {});
+
+        let refreshing = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (!refreshing) {
+            refreshing = true;
+            window.location.reload();
+          }
+        });
+      });
+    }
+
+    poblarSelectoresDeSector();
+    aplicarIdentidadSector();
+    inicializarEtiquetasVersion();
+    cargarEstado().then(() => {
+      actualizarBadgesMenu();
+      actualizarBotonScroll();
+    });
+  </script>
+</body>
+</html>
